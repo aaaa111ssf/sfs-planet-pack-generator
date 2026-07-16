@@ -16,11 +16,11 @@
 html,body{height:100%;}
 body{
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'PingFang SC','Microsoft YaHei',sans-serif;
-  background:var(--bg); color:var(--text); font-size:14px; line-height:1.5;
+  background:var(--bg); color:var(--text); font-size:15px; line-height:1.5;
   -webkit-font-smoothing:antialiased;
 }
-.app{max-width:1400px;margin:0 auto;padding:14px;}
-header{padding:24px 4px 20px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+.app{margin:0 auto;padding:6px;}
+header{padding:14px 4px 10px;border-bottom:1px solid var(--border);margin-bottom:8px;}
 header h1{
   font-size:2rem;font-weight:400;letter-spacing:0.08em;
   font-family:'Noto Serif SC','Source Han Serif SC','SimSun','STSong','Georgia','Times New Roman',serif;
@@ -28,33 +28,35 @@ header h1{
 header .subtitle-divider{
   width:40px;height:1px;background:var(--text);margin:12px 0;
 }
-header p{color:var(--text-muted);font-size:0.75rem;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;}
+header p{color:var(--text-muted);font-size:1rem;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;}
 
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center;}
 .btn{
   padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;
-  font-size:0.82rem;font-weight:500;background:var(--surface);color:var(--text);
+  font-size:1rem;font-weight:500;background:var(--surface);color:var(--text);
   transition:all .15s;white-space:nowrap;font-family:inherit;
 }
 .btn:hover{border-color:var(--text);}
 .btn-primary{background:var(--text);color:#fff;border-color:var(--text);}
 .btn-primary:hover{background:#000;}
-.btn-sm{padding:5px 10px;font-size:0.75rem;}
+.btn-sm{padding:5px 10px;font-size:1rem;}
 .btn-block{width:100%;}
 
-.main-grid{display:grid;grid-template-columns:1fr;gap:14px;position:relative;}
-@media(min-width:768px){.main-grid{grid-template-columns:260px 1fr;}}
+.main-grid{display:grid;grid-template-columns:1fr;gap:12px;position:relative;}
+@media(min-width:640px){.main-grid{grid-template-columns:480px 1fr;}}
+@media(min-width:960px){.main-grid{grid-template-columns:640px 1fr;}}
+@media(min-width:1280px){.main-grid{grid-template-columns:800px 1fr;}}
 
-.sidebar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;height:fit-content;max-height:calc(100vh - 120px);display:flex;flex-direction:column;}
-@media(max-width:767px){
+.sidebar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;height:fit-content;max-height:calc(100vh - 110px);display:flex;flex-direction:column;}
+@media(max-width:639px){
   .sidebar{position:absolute;left:0;top:0;width:260px;z-index:100;box-shadow:0 4px 20px rgba(0,0,0,0.15);transform:translateX(-110%);transition:transform .25s;}
   .sidebar.open{transform:translateX(0);}
   .sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.2);z-index:99;display:none;}
   .sidebar-backdrop.show{display:block;}
 }
 .sidebar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.sidebar-head h3{font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);}
-.tree{flex:1;overflow:auto;font-size:0.85rem;}
+.sidebar-head h3{font-size:0.92rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);}
+.tree{flex:1;overflow:auto;font-size:0.92rem;}
 .tree-node{}
 .tree-row{
   display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:var(--radius);cursor:pointer;
@@ -62,17 +64,17 @@ header p{color:var(--text-muted);font-size:0.75rem;font-weight:400;letter-spacin
 }
 .tree-row:hover{background:var(--surface-2);}
 .tree-row.active{background:var(--surface-3);border-color:var(--border-strong);}
-.tree-toggle{width:14px;text-align:center;color:var(--text-muted);cursor:pointer;font-size:0.7rem;flex-shrink:0;user-select:none;}
+.tree-toggle{width:14px;text-align:center;color:var(--text-muted);cursor:pointer;font-size:0.78rem;flex-shrink:0;user-select:none;}
 .tree-name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tree-type{font-size:0.65rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.04em;}
+.tree-type{font-size:0.92rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.04em;}
 .tree-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s;}
 .tree-row:hover .tree-actions,.tree-row.active .tree-actions{opacity:1;}
 .tree-act{
   width:20px;height:20px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;
-  border-radius:2px;font-size:0.8rem;line-height:1;display:flex;align-items:center;justify-content:center;
+  border-radius:2px;font-size:0.88rem;line-height:1;display:flex;align-items:center;justify-content:center;
 }
 .tree-act:hover{background:var(--surface);color:var(--text);}
-.tree-empty{color:var(--text-muted);text-align:center;padding:24px 8px;font-size:0.82rem;}
+.tree-empty{color:var(--text-muted);text-align:center;padding:24px 8px;font-size:1rem;}
 
 .content{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-height:400px;}
 .tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);scrollbar-width:thin;}
@@ -80,60 +82,61 @@ header p{color:var(--text-muted);font-size:0.75rem;font-weight:400;letter-spacin
 .tabs::-webkit-scrollbar-thumb{background:var(--border);}
 .tab{
   padding:11px 14px;cursor:pointer;border:none;background:none;color:var(--text-muted);
-  font-size:0.8rem;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent;
+  font-size:0.88rem;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent;
   transition:all .15s;font-family:inherit;
 }
 .tab:hover{color:var(--text);}
 .tab.active{color:var(--text);border-bottom-color:var(--text);}
-.tab-content{display:none;padding:18px;}
+.tab-content{display:none;padding:10px;}
 .tab-content.active{display:block;}
 
-/* Mobile tab dropdown */
+.tabs{flex-wrap:wrap;}
+.tab{padding:6px 7px;font-size:0.92rem;}
 .tab-mob{display:none;margin-bottom:14px;}
-.tab-mob select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:0.85rem;font-family:inherit;}
-@media(max-width:767px){
+.tab-mob select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:0.92rem;font-family:inherit;}
+@media(max-width:639px){
   .tabs{display:none;}
   .tab-mob{display:block;}
 }
 
-.section-title{font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.section-title{font-size:0.92rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
 .section-title:first-child{margin-top:0;}
-.form-row{display:grid;grid-template-columns:1fr;gap:12px;}
+.form-row{display:grid;grid-template-columns:1fr;gap:8px;}
 @media(min-width:620px){.form-row{grid-template-columns:1fr 1fr;}}
-.form-row-3{display:grid;grid-template-columns:1fr;gap:12px;}
+.form-row-3{display:grid;grid-template-columns:1fr;gap:8px;}
 @media(min-width:620px){.form-row-3{grid-template-columns:1fr 1fr 1fr;}}
-.form-group{margin-bottom:14px;}
-.form-group label{display:block;margin-bottom:5px;font-size:0.78rem;font-weight:500;color:var(--text-muted);}
+.form-group{margin-bottom:10px;}
+.form-group label{display:block;margin-bottom:5px;font-size:0.92rem;font-weight:500;color:var(--text-muted);}
 .form-group input[type="text"],.form-group input[type="number"],.form-group select,.form-group textarea{
   width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);
-  background:var(--bg);color:var(--text);font-size:0.85rem;outline:none;font-family:inherit;transition:border-color .15s;
+  background:var(--bg);color:var(--text);font-size:0.92rem;outline:none;font-family:inherit;transition:border-color .15s;
 }
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--text);}
-.form-group textarea{resize:vertical;min-height:60px;font-family:'SF Mono',Consolas,monospace;font-size:0.78rem;}
+.form-group textarea{resize:vertical;min-height:60px;font-family:'SF Mono',Consolas,monospace;font-size:0.92rem;}
 .formula-area{min-height:120px!important;}
 
 .checkbox-wrapper{display:flex;align-items:center;gap:8px;min-height:34px;}
 .checkbox-wrapper input[type="checkbox"]{width:16px;height:16px;accent-color:var(--text);cursor:pointer;flex-shrink:0;}
-.checkbox-wrapper label{margin:0;font-size:0.82rem;color:var(--text);font-weight:400;cursor:pointer;}
+.checkbox-wrapper label{margin:0;font-size:1rem;color:var(--text);font-weight:400;cursor:pointer;}
 
 .color-input-wrapper{display:flex;align-items:center;gap:8px;}
 .color-input-wrapper input[type="color"]{width:38px;height:34px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;padding:2px;background:var(--surface);flex-shrink:0;}
-.color-values{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;flex:1;}
-.color-values input{padding:6px 8px!important;font-size:0.78rem!important;}
+.color-values{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;width:150px;flex-shrink:0;}
+.color-values input{padding:6px 8px!important;font-size:0.92rem!important;}
 .color-alpha{width:60px!important;flex:0 0 auto!important;}
 .xy-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 
-.help-text{font-size:0.72rem;color:var(--text-muted);margin-top:4px;font-weight:300;line-height:1.4;}
+.help-text{font-size:0.92rem;color:var(--text-muted);margin-top:4px;font-weight:300;line-height:1.4;}
 
 .enable-section{background:var(--surface-2);padding:10px 12px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:14px;}
 .enable-section .checkbox-wrapper label{font-weight:600;color:var(--text);}
 
 .array-item{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;}
 .array-item-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.array-item-title{font-weight:600;font-size:0.8rem;}
+.array-item-title{font-weight:600;font-size:0.88rem;}
 .icon-btn{
   width:24px;height:24px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);
-  cursor:pointer;border-radius:2px;font-size:0.9rem;line-height:1;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;border-radius:2px;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;
 }
 .icon-btn:hover{color:var(--text);border-color:var(--text);}
 .add-btn-wrap{margin-top:6px;}
@@ -142,14 +145,14 @@ header p{color:var(--text-muted);font-size:0.75rem;font-weight:400;letter-spacin
 #planetCanvas{background:transparent;border-radius:50%;max-width:100%;height:auto;}
 .preview-info{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:380px;}
 .preview-info-item{background:var(--surface-2);padding:8px;border-radius:var(--radius);text-align:center;border:1px solid var(--border);}
-.preview-info-label{font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;}
+.preview-info-label{font-size:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;}
 .preview-info-value{font-size:1rem;font-weight:600;margin-top:2px;}
-.json-preview{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:'SF Mono',Consolas,monospace;font-size:0.72rem;white-space:pre-wrap;word-break:break-all;max-height:380px;overflow:auto;color:var(--text);}
+.json-preview{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:'SF Mono',Consolas,monospace;font-size:0.92rem;white-space:pre-wrap;word-break:break-all;max-height:380px;overflow:auto;color:var(--text);}
 
 .export-grid{display:grid;grid-template-columns:1fr;gap:14px;}
 @media(min-width:700px){.export-grid{grid-template-columns:1fr 1fr;}}
 .export-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
-.export-card h4{font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;color:var(--text);}
+.export-card h4{font-size:0.92rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;color:var(--text);}
 .export-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.04);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px;backdrop-filter:blur(2px);}
@@ -158,16 +161,16 @@ header p{color:var(--text-muted);font-size:0.75rem;font-weight:400;letter-spacin
 .modal h2{font-size:1.1rem;font-weight:300;margin-bottom:14px;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
 
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 20px;border-radius:var(--radius);z-index:2000;opacity:0;transition:all .25s;font-size:0.82rem;box-shadow:0 4px 14px rgba(0,0,0,0.2);}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 20px;border-radius:var(--radius);z-index:2000;opacity:0;transition:all .25s;font-size:1rem;box-shadow:0 4px 14px rgba(0,0,0,0.2);}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 .toast.error{background:#a33;}
 
 .empty-state{text-align:center;padding:50px 20px;color:var(--text-muted);}
 .empty-state h3{font-weight:300;font-size:1.1rem;margin-bottom:8px;color:var(--text);}
-.empty-state p{font-size:0.85rem;}
+.empty-state p{font-size:0.92rem;}
 
 .spacer{flex:1;}
-.hint{font-size:0.72rem;color:var(--text-muted);font-weight:300;}
+.hint{font-size:0.92rem;color:var(--text-muted);font-weight:300;}
 select{cursor:pointer;}
 </style>
 </head>
@@ -187,6 +190,7 @@ select{cursor:pointer;}
     <button class="btn" onclick="saveProject()">保存项目</button>
     <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
     <button class="btn" onclick="document.getElementById('packFiles').click()">导入行星包</button>
+    <button class="btn btn-primary" onclick="exportPlanetPack()">导出行星包</button>
     <input type="file" id="projFile" accept=".sfsproj,.json" style="display:none" onchange="openProject(event)">
     <input type="file" id="packFiles" accept=".txt,.json" multiple style="display:none" onchange="importPackFiles(event)">
   </div>
@@ -245,7 +249,7 @@ select{cursor:pointer;}
     <h2>导入行星 TXT</h2>
     <div class="form-group">
       <label>粘贴 SFS 行星 JSON 内容</label>
-      <textarea id="importText" style="min-height:220px;font-family:monospace;font-size:0.75rem;"></textarea>
+      <textarea id="importText" style="min-height:220px;font-family:monospace;font-size:1rem;"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('importModal')">取消</button>
@@ -268,7 +272,7 @@ const state = {
   expanded: {},
   packInfo: {
     name: 'MyPlanetPack',
-    author: '',
+    authorName: '',
     version: '1.0',
     description: '',
     includeDefaultPlanets: false,
@@ -278,9 +282,11 @@ const state = {
   },
   spaceCenter: {
     address: 'Earth',
-    angle: 0,
-    horizontalPosition: 0,
-    height: 0
+    angle: 90,
+    position_LaunchPad: {
+      horizontalPosition: 365,
+      height: 56.2
+    }
   }
 };
 
@@ -333,8 +339,8 @@ const DEFAULT_WATER = {
   oceanMaskTexture:'Earth_OceanMask_V2', lowerTerrain:false, oceanDepth:1000,
   sand:{r:0.76,g:0.7,b:0.5,a:1}, floor:{r:0.1,g:0.2,b:0.3,a:1},
   shallow:{r:0.3,g:0.5,b:0.7,a:1}, deep:{r:0.05,g:0.1,b:0.2,a:1},
-  maskGradient_Water:{must:[],cannot:[],global:false}, waterGradientWidthMultiplier:1,
-  maskGradient_Terrain:{must:[],cannot:[],global:false}, sandGradientWidthMultiplier:1,
+  maskGradient_Water:{must:1000,cannot:700,global:2000}, waterGradientWidthMultiplier:1,
+  maskGradient_Terrain:{must:25,cannot:25,global:50}, sandGradientWidthMultiplier:1,
   floorGradientWidthMultiplier:1,
   shoreNoiseSize:{x:100,y:100}, sandNoiseSize:{x:100,y:100}, wavesSize:{x:50,y:50},
   opacity_Surface:1, opacity_Far:0.8, opacity_FullDarkness:0.5,
@@ -424,6 +430,7 @@ function buildSkeleton(name, parentName){
       verticeSize: 4,
       collider: true,
       flatZones: [],
+      flatZonesDifficulties: { Normal: [], Hard: [], Realistic: [] },
       rocks: JSON.parse(JSON.stringify(DEFAULT_ROCKS))
     },
     WATER_DATA: null,
@@ -840,8 +847,15 @@ function renderTerrain(p){
     arrTextField('TERRAIN_DATA.textureFormula','贴图公式 (每行一条)',t.textureFormula,'纹理跟随地形形状');
 
   html += section('平坦区域 (Flat Zones)') +
-    '<div id="flatZones">' + (t.flatZones||[]).map((z,i)=>flatZoneItem(i,z)).join('') + '</div>' +
-    '<div class="add-btn-wrap"><button class="btn btn-sm" onclick="addFlatZone()">+ 添加平坦区域</button></div>';
+    '<div id="flatZones">' + (t.flatZones||[]).map((z,i)=>flatZoneItem(i,z,'flatZones')).join('') + '</div>' +
+    '<div class="add-btn-wrap"><button class="btn btn-sm" onclick="addFlatZone(\'flatZones\')">+ 添加平坦区域</button></div>';
+
+  ['Normal','Hard','Realistic'].forEach(diff=>{
+    const zones = (t.flatZonesDifficulties && t.flatZonesDifficulties[diff]) || [];
+    html += section('平坦区域 - ' + diff) +
+      '<div id="flatZones_'+diff+'">' + zones.map((z,i)=>flatZoneItem(i,z,diff)).join('') + '</div>' +
+      '<div class="add-btn-wrap"><button class="btn btn-sm" onclick="addFlatZone(\''+diff+'\')">+ 添加 '+diff+' 平坦区域</button></div>';
+  });
 
   html += section('岩石 (Rocks)') + enableCheckbox(t.rocks,'启用岩石','TERRAIN_DATA.rocks',DEFAULT_ROCKS,'');
   if (t.rocks){
@@ -856,14 +870,15 @@ function renderTerrain(p){
   }
   return html;
 }
-function flatZoneItem(i,z){
+function flatZoneItem(i,z,difficulty){
+  const path = difficulty==='flatZones' ? 'TERRAIN_DATA.flatZones.'+i : 'TERRAIN_DATA.flatZonesDifficulties.'+difficulty+'.'+i;
   return '<div class="array-item"><div class="array-item-header">'+
     '<span class="array-item-title">平坦区域 #'+(i+1)+'</span>'+
-    '<button class="icon-btn" onclick="removeFlatZone('+i+')" title="删除">x</button></div>'+
-    row(numField('TERRAIN_DATA.flatZones.'+i+'.height','高度 (米)',z.height,1,'') +
-        numField('TERRAIN_DATA.flatZones.'+i+'.angle','角度 (弧度)',z.angle,0.01,'')) +
-    row(numField('TERRAIN_DATA.flatZones.'+i+'.width','宽度 (米)',z.width,10,'') +
-        numField('TERRAIN_DATA.flatZones.'+i+'.transition','过渡区域 (米)',z.transition,10,'')) +
+    '<button class="icon-btn" onclick="removeFlatZone('+i+',\''+difficulty+'\')" title="删除">x</button></div>'+
+    row(numField(path+'.height','高度 (米)',z.height,1,'') +
+        numField(path+'.angle','角度 (弧度)',z.angle,0.01,'')) +
+    row(numField(path+'.width','宽度 (米)',z.width,10,'') +
+        numField(path+'.transition','过渡区域 (米)',z.transition,10,'')) +
     '</div>';
 }
 
@@ -881,12 +896,12 @@ function renderWater(p){
           colorField('WATER_DATA.deep','深水颜色',w.deep,'')) +
       colorField('WATER_DATA.mapColor','地图颜色',w.mapColor,'') +
       section('遮罩梯度') +
-      row3(checkField('WATER_DATA.maskGradient_Water.global','水-global',w.maskGradient_Water.global,'') +
-           arrTextField('WATER_DATA.maskGradient_Water.must','水-must (每行一项)',w.maskGradient_Water.must,'') +
-           arrTextField('WATER_DATA.maskGradient_Water.cannot','水-cannot (每行一项)',w.maskGradient_Water.cannot,'')) +
-      row3(checkField('WATER_DATA.maskGradient_Terrain.global','地形-global',w.maskGradient_Terrain.global,'') +
-           arrTextField('WATER_DATA.maskGradient_Terrain.must','地形-must (每行一项)',w.maskGradient_Terrain.must,'') +
-           arrTextField('WATER_DATA.maskGradient_Terrain.cannot','地形-cannot (每行一项)',w.maskGradient_Terrain.cannot,'')) +
+      row3(numField('WATER_DATA.maskGradient_Water.must','水-must',w.maskGradient_Water.must,1,'') +
+           numField('WATER_DATA.maskGradient_Water.cannot','水-cannot',w.maskGradient_Water.cannot,1,'') +
+           numField('WATER_DATA.maskGradient_Water.global','水-global',w.maskGradient_Water.global,1,'')) +
+      row3(numField('WATER_DATA.maskGradient_Terrain.must','地形-must',w.maskGradient_Terrain.must,1,'') +
+           numField('WATER_DATA.maskGradient_Terrain.cannot','地形-cannot',w.maskGradient_Terrain.cannot,1,'') +
+           numField('WATER_DATA.maskGradient_Terrain.global','地形-global',w.maskGradient_Terrain.global,1,'')) +
       section('梯度宽度倍数') +
       row3(numField('WATER_DATA.waterGradientWidthMultiplier','水梯度宽度',w.waterGradientWidthMultiplier,0.1,'') +
            numField('WATER_DATA.sandGradientWidthMultiplier','沙滩梯度宽度',w.sandGradientWidthMultiplier,0.1,'') +
@@ -1020,7 +1035,7 @@ function renderExport(p){
     '<div class="export-grid">' +
       '<div class="export-card"><h4>包信息</h4>' +
         textField('packInfo.name','行星包名称',pi.name,'') +
-        textField('packInfo.author','作者',pi.author,'') +
+        textField('packInfo.authorName','作者',pi.authorName,'') +
         textField('packInfo.version','版本',pi.version,'') +
         '<div class="form-group"><label>描述</label><textarea data-ppath="packInfo.description" style="min-height:70px">'+esc(pi.description)+'</textarea></div>' +
         checkField('packInfo.includeDefaultPlanets','包含默认行星',pi.includeDefaultPlanets,'') +
@@ -1031,16 +1046,15 @@ function renderExport(p){
       '<div class="export-card"><h4>空间中心设置</h4>' +
         selField('spaceCenter.address','所在天体',sc.address,bodyOpts,'默认 Earth') +
         numField('spaceCenter.angle','角度',sc.angle,1,'') +
-        numField('spaceCenter.horizontalPosition','发射台水平位置',sc.horizontalPosition,1,'') +
-        numField('spaceCenter.height','发射台高度',sc.height,1,'') +
+        numField('spaceCenter.position_LaunchPad.horizontalPosition','发射台水平位置',sc.position_LaunchPad.horizontalPosition,0.1,'') +
+        numField('spaceCenter.position_LaunchPad.height','发射台高度',sc.position_LaunchPad.height,0.1,'') +
       '</div>' +
     '</div>' +
     section('导出操作') +
     '<div class="export-actions">' +
-      '<button class="btn btn-primary btn-block" onclick="exportPlanetPack()">导出行星包 (多个 .txt + 元数据)</button>' +
       '<button class="btn btn-block" onclick="exportSinglePlanet()">导出当前天体 (.txt)</button>' +
       '<button class="btn btn-block" onclick="saveProject()">保存项目 (.sfsproj)</button>' +
-      '<div class="hint">导出行星包将下载每个天体的 {名称}.txt、pack_info.txt、Import_Settings.txt、Space_Center_Data.txt、Version.txt。</div>' +
+      '<div class="hint">顶部工具栏的「导出行星包」按钮可打包为 SFS 可用的 .zip 文件。</div>' +
     '</div>';
 }
 
@@ -1154,12 +1168,26 @@ function removeFogKey(i){
   currentPlanet().ATMOSPHERE_VISUALS_DATA.FOG.keys.splice(i,1);
   renderActiveTab(); attachEventListeners(); updateJsonPreview();
 }
-function addFlatZone(){
-  currentPlanet().TERRAIN_DATA.flatZones.push({ height:0, angle:0, width:1000, transition:200 });
+function addFlatZone(difficulty){
+  const t = currentPlanet().TERRAIN_DATA;
+  const item = { height:0, angle:0, width:1000, transition:200 };
+  if (difficulty === 'flatZones') {
+    t.flatZones.push(item);
+  } else {
+    if (!t.flatZonesDifficulties) t.flatZonesDifficulties = { Normal: [], Hard: [], Realistic: [] };
+    t.flatZonesDifficulties[difficulty].push(item);
+  }
   renderActiveTab(); attachEventListeners(); updateJsonPreview();
 }
-function removeFlatZone(i){
-  currentPlanet().TERRAIN_DATA.flatZones.splice(i,1);
+function removeFlatZone(i, difficulty){
+  const t = currentPlanet().TERRAIN_DATA;
+  if (difficulty === 'flatZones') {
+    t.flatZones.splice(i,1);
+  } else {
+    if (t.flatZonesDifficulties && t.flatZonesDifficulties[difficulty]) {
+      t.flatZonesDifficulties[difficulty].splice(i,1);
+    }
+  }
   renderActiveTab(); attachEventListeners(); updateJsonPreview();
 }
 function addPPKey(){
@@ -1410,41 +1438,58 @@ function openProject(event){
   reader.readAsText(file);
   event.target.value = '';
 }
+function loadJSZip(){
+  return new Promise((resolve, reject) => {
+    if (window.JSZip) return resolve(window.JSZip);
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+    script.onload = () => resolve(window.JSZip);
+    script.onerror = () => reject(new Error('JSZip 加载失败'));
+    document.head.appendChild(script);
+  });
+}
 function exportSinglePlanet(){
   const p = currentPlanet();
   if (!p){ showToast('未选中天体', 'error'); return; }
   downloadFile(p.name + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
   showToast('已导出: ' + p.name + '.txt');
 }
-function exportPlanetPack(){
+async function exportPlanetPack(){
   if (state.planets.length === 0){ showToast('没有天体可导出', 'error'); return; }
-  const pi = state.packInfo;
-  const files = [];
-  state.planets.forEach(p => {
-    files.push({ name: p.name + '.txt', content: JSON.stringify(cleanPlanetForExport(p), null, 2) });
-  });
-  files.push({ name: 'pack_info.txt', content: JSON.stringify({
-    name: pi.name, author: pi.author, version: pi.version, description: pi.description,
-    includeDefaultPlanets: pi.includeDefaultPlanets,
-    includeDefaultHeightmaps: pi.includeDefaultHeightmaps,
-    includeDefaultTextures: pi.includeDefaultTextures,
-    hideStarsInAtmosphere: pi.hideStarsInAtmosphere
-  }, null, 2) });
-  files.push({ name: 'Import_Settings.txt', content: JSON.stringify({
-    planets: state.planets.map(p => p.name + '.txt'),
-    textures: [], heightmaps: []
-  }, null, 2) });
-  files.push({ name: 'Space_Center_Data.txt', content: JSON.stringify(state.spaceCenter, null, 2) });
-  files.push({ name: 'Version.txt', content: '1.6.00.16' });
+  try {
+    const JSZip = await loadJSZip();
+    const zip = new JSZip();
+    const pi = state.packInfo;
 
-  let i = 0;
-  const next = () => {
-    if (i >= files.length){ showToast('已导出 '+files.length+' 个文件'); return; }
-    const f = files[i++];
-    downloadFile(f.name, f.content);
-    setTimeout(next, 250);
-  };
-  next();
+    state.planets.forEach(p => {
+      zip.file('Planet Data/' + p.name + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
+    });
+    zip.file('Import_Settings.txt', JSON.stringify({
+      includeDefaultPlanets: pi.includeDefaultPlanets,
+      includeDefaultHeightmaps: pi.includeDefaultHeightmaps,
+      includeDefaultTextures: pi.includeDefaultTextures,
+      hideStarsInAtmosphere: pi.hideStarsInAtmosphere,
+      authorName: pi.authorName || 'n/a',
+      version: pi.version || 'n/a',
+      description: pi.description || 'n/a'
+    }, null, 2));
+    zip.file('Space_Center_Data.txt', JSON.stringify(state.spaceCenter, null, 2));
+    zip.file('Version.txt', '1.6.00.18');
+    zip.folder('Heightmap Data');
+    zip.folder('Texture Data');
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (pi.name || 'MyPlanetPack') + '.zip';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast('已导出: ' + (pi.name || 'MyPlanetPack') + '.zip');
+  } catch (e) {
+    showToast('导出失败: ' + e.message, 'error');
+  }
 }
 function downloadFile(filename, content){
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -1632,7 +1677,7 @@ function toggleSidebar(){
   bd.classList.toggle('show');
 }
 function updateResponsive(){
-  const isMob = window.innerWidth < 768;
+  const isMob = window.innerWidth < 640;
   const toggleBtn = document.getElementById('sidebarToggle');
   const closeBtn = document.getElementById('sidebarClose');
   if (toggleBtn) toggleBtn.style.display = isMob ? 'inline-flex' : 'none';
