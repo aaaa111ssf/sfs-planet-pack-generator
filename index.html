@@ -187,6 +187,9 @@ select{cursor:pointer;}
     <button class="btn btn-primary" onclick="newProject()">新建项目</button>
     <button class="btn" onclick="showAddBodyModal()">添加天体</button>
     <div class="spacer"></div>
+    <span class="asset-info" id="assetInfo" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
+    <button class="btn" onclick="showTextureCreator()">纹理创建</button>
+    <button class="btn" onclick="showAssetManager()">资源管理</button>
     <button class="btn" onclick="saveProject()">保存项目</button>
     <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
     <button class="btn" onclick="document.getElementById('packFiles').click()">导入行星包</button>
@@ -260,6 +263,66 @@ select{cursor:pointer;}
 
 <div class="toast" id="toast"></div>
 
+<!-- Asset Manager Modal -->
+<div class="modal-overlay" id="assetModal">
+  <div class="modal" style="max-width:520px;">
+    <h2>资源缓存管理</h2>
+    <div id="assetStats" style="margin-bottom:14px;font-size:0.9rem;"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('assetModal')">关闭</button>
+      <button class="btn" onclick="clearAssetCache()">清除全部缓存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Texture Creator Modal -->
+<div class="modal-overlay" id="textureModal">
+  <div class="modal" style="max-width:700px;">
+    <h2>纹理创建工具</h2>
+    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-bottom:14px;">
+      <div>
+        <div class="form-group">
+          <label>纹理类型</label>
+          <select id="texType" onchange="regenTexture()">
+            <option value="rocky">岩石/陆地</option>
+            <option value="gas">气态巨行星</option>
+            <option value="ice">冰冻</option>
+            <option value="cloud">云层</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>种子</label>
+          <input type="number" id="texSeed" value="1" min="0" max="9999" onchange="regenTexture()">
+        </div>
+        <div class="form-group">
+          <label>主色调</label>
+          <input type="color" id="texColor1" value="#8B4513" onchange="regenTexture()">
+        </div>
+        <div class="form-group">
+          <label>辅色调</label>
+          <input type="color" id="texColor2" value="#228B22" onchange="regenTexture()">
+        </div>
+        <div class="form-group">
+          <label>噪声强度</label>
+          <input type="range" id="texNoise" min="0" max="100" value="50" oninput="regenTexture()">
+        </div>
+        <div class="form-group">
+          <label>细节层次</label>
+          <input type="range" id="texDetail" min="1" max="8" value="4" oninput="regenTexture()">
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <canvas id="texCanvas" width="256" height="256" style="border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:256px;height:auto;"></canvas>
+        <button class="btn btn-primary" onclick="downloadTexture()">下载纹理 (PNG)</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('textureModal')">关闭</button>
+      <button class="btn btn-primary" onclick="saveTextureToCache()">保存到缓存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 /* ============================================================
@@ -287,7 +350,8 @@ const state = {
       horizontalPosition: 365,
       height: 56.2
     }
-  }
+  },
+  assetCache: { textures: 0, presets: 0 }
 };
 
 let _idc = 0;
@@ -309,6 +373,8 @@ const TABS = [
   { id:'orbit',        label:'轨道' },
   { id:'landmarks',    label:'地标' },
   { id:'achievements', label:'成就' },
+  { id:'textures',     label:'纹理' },
+  { id:'orbitView',    label:'轨道视图' },
   { id:'preview',      label:'预览' },
   { id:'export',       label:'导出' }
 ];
@@ -704,6 +770,8 @@ function switchTab(id){
   renderActiveTab();
   attachEventListeners();
   if (id === 'preview') drawPreview();
+  if (id === 'orbitView'){ initOrbitCanvas(); setTimeout(drawOrbitView, 50); }
+  if (id === 'textures'){ setTimeout(regenTextureTab, 50); }
 }
 function renderActiveTab(){
   const p = currentPlanet();
@@ -722,6 +790,8 @@ function renderActiveTab(){
     case 'orbit': html = renderOrbit(p); break;
     case 'landmarks': html = renderLandmarks(p); break;
     case 'achievements': html = renderAchievements(p); break;
+    case 'textures': html = renderTextureTab(p); break;
+    case 'orbitView': html = renderOrbitViewTab(p); break;
     case 'preview': html = renderPreview(p); break;
     case 'export': html = renderExport(p); break;
   }
@@ -1056,6 +1126,103 @@ function renderExport(p){
       '<button class="btn btn-block" onclick="saveProject()">保存项目 (.sfsproj)</button>' +
       '<div class="hint">顶部工具栏的「导出行星包」按钮可打包为 SFS 可用的 .zip 文件。</div>' +
     '</div>';
+}
+
+function renderTextureTab(p){
+  return section('程序化纹理生成') +
+    '<div class="form-row">' +
+      '<div class="form-group"><label>纹理类型</label><select id="texTabType" onchange="regenTextureTab()"><option value="rocky">岩石/陆地</option><option value="gas">气态巨行星</option><option value="ice">冰冻</option><option value="cloud">云层</option></select></div>' +
+      '<div class="form-group"><label>种子</label><input type="number" id="texTabSeed" value="1" min="0" max="9999" onchange="regenTextureTab()"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label>主色调</label><input type="color" id="texTabColor1" value="#8B4513" onchange="regenTextureTab()"></div>' +
+      '<div class="form-group"><label>辅色调</label><input type="color" id="texTabColor2" value="#228B22" onchange="regenTextureTab()"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label>噪声强度</label><input type="range" id="texTabNoise" min="0" max="100" value="50" oninput="regenTextureTab()"></div>' +
+      '<div class="form-group"><label>细节层次</label><input type="range" id="texTabDetail" min="1" max="8" value="4" oninput="regenTextureTab()"></div>' +
+    '</div>' +
+    '<div style="text-align:center;margin:14px 0;">' +
+      '<canvas id="texTabCanvas" width="256" height="256" style="border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:320px;height:auto;"></canvas>' +
+    '</div>' +
+    '<div class="export-actions">' +
+      '<button class="btn" onclick="downloadTextureTab()">下载纹理</button>' +
+      '<button class="btn btn-primary" onclick="saveTextureTabToCache()">保存到缓存</button>' +
+    '</div>';
+}
+
+function regenTextureTab(){
+  const canvas = document.getElementById('texTabCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const img = ctx.createImageData(W, H);
+  const type = document.getElementById('texTabType').value;
+  const seed = parseInt(document.getElementById('texTabSeed').value) || 1;
+  const c1 = _hexToRgbObj(document.getElementById('texTabColor1').value);
+  const c2 = _hexToRgbObj(document.getElementById('texTabColor2').value);
+  const noiseStr = parseInt(document.getElementById('texTabNoise').value) / 100;
+  const octaves = parseInt(document.getElementById('texTabDetail').value) || 4;
+  for (let y = 0; y < H; y++){
+    for (let x = 0; x < W; x++){
+      const i = (y * W + x) * 4;
+      let n = _noise(x / W, y / H, seed, octaves, 0.5);
+      if (type === 'gas'){
+        const bands = Math.sin(y / H * Math.PI * 6 + _noise(x / W, y / H, seed + 100, 3, 0.5) * 2) * 0.5 + 0.5;
+        n = n * noiseStr + bands * (1 - noiseStr);
+      } else if (type === 'ice'){
+        n = n * 0.3 + 0.7;
+      } else if (type === 'cloud'){
+        n = n > 0.55 ? (n - 0.55) / 0.45 : 0;
+      }
+      const t = Math.max(0, Math.min(1, n));
+      img.data[i] = Math.round(c1.r + (c2.r - c1.r) * t);
+      img.data[i + 1] = Math.round(c1.g + (c2.g - c1.g) * t);
+      img.data[i + 2] = Math.round(c1.b + (c2.b - c1.b) * t);
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function downloadTextureTab(){
+  const canvas = document.getElementById('texTabCanvas');
+  if (!canvas) return;
+  const url = canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sfs_texture_' + Date.now() + '.png';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+async function saveTextureTabToCache(){
+  const canvas = document.getElementById('texTabCanvas');
+  if (!canvas) return;
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  const name = 'texture_' + Date.now() + '.png';
+  if (!_db) await openAssetDB();
+  const tx = _db.transaction('textures', 'readwrite');
+  await tx.objectStore('textures').put({ name, blob, created: Date.now() });
+  await countAssets();
+  showToast('纹理已保存到缓存: ' + name);
+}
+
+function renderOrbitViewTab(p){
+  return section('轨道可视化') +
+    '<div style="position:relative;width:100%;height:420px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fafafa;">' +
+      '<canvas id="orbitCanvas" width="800" height="420" style="width:100%;height:100%;display:block;cursor:grab;"></canvas>' +
+      '<div style="position:absolute;top:6px;left:6px;font-size:0.78rem;color:#666;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;">' +
+        '滚轮缩放 · 拖拽平移 · 双击选中行星' +
+      '</div>' +
+    '</div>' +
+    '<div class="export-actions" style="margin-top:10px;">' +
+      '<button class="btn" onclick="resetOrbitView()">重置视图</button>' +
+      '<button class="btn" onclick="drawOrbitView()">刷新</button>' +
+    '</div>';
+}
+
+function resetOrbitView(){
+  _orbitScale = 1; _orbitOffsetX = 0; _orbitOffsetY = 0;
+  drawOrbitView();
 }
 
 /* ============================================================
@@ -1690,11 +1857,324 @@ function updateResponsive(){
 window.addEventListener('resize', updateResponsive);
 
 /* ============================================================
+   ASSET CACHE (IndexedDB)
+============================================================ */
+const DB_NAME = 'SFSAssetsDB';
+const DB_VER = 1;
+let _db = null;
+
+function openAssetDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { _db = req.result; resolve(_db); };
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('textures')) db.createObjectStore('textures', { keyPath: 'name' });
+      if (!db.objectStoreNames.contains('presets')) db.createObjectStore('presets', { keyPath: 'name' });
+    };
+  });
+}
+
+async function countAssets(){
+  if (!_db) await openAssetDB();
+  const tx1 = _db.transaction('textures', 'readonly');
+  const tx2 = _db.transaction('presets', 'readonly');
+  const texCount = await tx1.objectStore('textures').count().then(r=>r,()=>0);
+  const preCount = await tx2.objectStore('presets').count().then(r=>r,()=>0);
+  state.assetCache = { textures: texCount, presets: preCount };
+  updateAssetInfo();
+}
+
+function updateAssetInfo(){
+  const el = document.getElementById('assetInfo');
+  if (el) el.textContent = 'Assets: ' + state.assetCache.textures + ' textures, ' + state.assetCache.presets + ' presets';
+}
+
+function showAssetManager(){
+  const stats = document.getElementById('assetStats');
+  stats.innerHTML = '<p>已缓存纹理: <strong>' + state.assetCache.textures + '</strong></p><p>已缓存预设: <strong>' + state.assetCache.presets + '</strong></p>';
+  document.getElementById('assetModal').classList.add('active');
+}
+
+async function clearAssetCache(){
+  if (!_db) await openAssetDB();
+  const tx1 = _db.transaction('textures', 'readwrite');
+  const tx2 = _db.transaction('presets', 'readwrite');
+  await tx1.objectStore('textures').clear();
+  await tx2.objectStore('presets').clear();
+  state.assetCache = { textures: 0, presets: 0 };
+  updateAssetInfo();
+  showToast('资源缓存已清除');
+  closeModal('assetModal');
+}
+
+async function saveTextureToCache(){
+  const canvas = document.getElementById('texCanvas');
+  if (!canvas) return;
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  const name = 'texture_' + Date.now() + '.png';
+  if (!_db) await openAssetDB();
+  const tx = _db.transaction('textures', 'readwrite');
+  await tx.objectStore('textures').put({ name, blob, created: Date.now() });
+  await countAssets();
+  showToast('纹理已保存到缓存: ' + name);
+}
+
+/* ============================================================
+   TEXTURE CREATOR
+============================================================ */
+function _hash(x, y, seed){
+  let h = seed + x * 374761393 + y * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) & 0x7fffffff) / 0x7fffffff;
+}
+function _noise(x, y, seed, octaves, persistence){
+  let total = 0, frequency = 1, amplitude = 1, maxVal = 0;
+  for (let i = 0; i < octaves; i++){
+    const ix = Math.floor(x * frequency), iy = Math.floor(y * frequency);
+    const fx = x * frequency - ix, fy = y * frequency - iy;
+    const a = _hash(ix, iy, seed + i);
+    const b = _hash(ix + 1, iy, seed + i);
+    const c = _hash(ix, iy + 1, seed + i);
+    const d = _hash(ix + 1, iy + 1, seed + i);
+    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const n = a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+    total += n * amplitude;
+    maxVal += amplitude;
+    amplitude *= persistence;
+    frequency *= 2;
+  }
+  return total / maxVal;
+}
+function _hexToRgbObj(hex){
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function showTextureCreator(){
+  document.getElementById('textureModal').classList.add('active');
+  setTimeout(regenTexture, 50);
+}
+
+function regenTexture(){
+  const canvas = document.getElementById('texCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const img = ctx.createImageData(W, H);
+  const type = document.getElementById('texType').value;
+  const seed = parseInt(document.getElementById('texSeed').value) || 1;
+  const c1 = _hexToRgbObj(document.getElementById('texColor1').value);
+  const c2 = _hexToRgbObj(document.getElementById('texColor2').value);
+  const noiseStr = parseInt(document.getElementById('texNoise').value) / 100;
+  const octaves = parseInt(document.getElementById('texDetail').value) || 4;
+
+  for (let y = 0; y < H; y++){
+    for (let x = 0; x < W; x++){
+      const i = (y * W + x) * 4;
+      let n = _noise(x / W, y / H, seed, octaves, 0.5);
+      if (type === 'gas'){
+        const bands = Math.sin(y / H * Math.PI * 6 + _noise(x / W, y / H, seed + 100, 3, 0.5) * 2) * 0.5 + 0.5;
+        n = n * noiseStr + bands * (1 - noiseStr);
+      } else if (type === 'ice'){
+        n = n * 0.3 + 0.7;
+      } else if (type === 'cloud'){
+        n = n > 0.55 ? (n - 0.55) / 0.45 : 0;
+      }
+      const t = Math.max(0, Math.min(1, n));
+      img.data[i] = Math.round(c1.r + (c2.r - c1.r) * t);
+      img.data[i + 1] = Math.round(c1.g + (c2.g - c1.g) * t);
+      img.data[i + 2] = Math.round(c1.b + (c2.b - c1.b) * t);
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function downloadTexture(){
+  const canvas = document.getElementById('texCanvas');
+  if (!canvas) return;
+  const url = canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sfs_texture_' + Date.now() + '.png';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ============================================================
+   ORBIT VISUALIZER
+============================================================ */
+let _orbitCtx = null, _orbitCanvas = null, _orbitScale = 1, _orbitOffsetX = 0, _orbitOffsetY = 0, _orbitDragging = false, _orbitLastX = 0, _orbitLastY = 0;
+
+function initOrbitCanvas(){
+  const canvas = document.getElementById('orbitCanvas');
+  if (!canvas) return;
+  _orbitCanvas = canvas;
+  _orbitCtx = canvas.getContext('2d');
+  function _cc(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x: (e.offsetX / rect.width) * canvas.width, y: (e.offsetY / rect.height) * canvas.height };
+  }
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    const W = canvas.width, H = canvas.height;
+    const {x: mx, y: my} = _cc(e);
+    _orbitOffsetX = (mx - W / 2) * (1 - factor) + factor * _orbitOffsetX;
+    _orbitOffsetY = (my - H / 2) * (1 - factor) + factor * _orbitOffsetY;
+    _orbitScale *= factor;
+    _orbitScale = Math.max(0.05, Math.min(20, _orbitScale));
+    drawOrbitView();
+  });
+  canvas.addEventListener('mousedown', e => { _orbitDragging = true; const {x,y} = _cc(e); _orbitLastX = x; _orbitLastY = y; });
+  canvas.addEventListener('mousemove', e => {
+    const {x,y} = _cc(e);
+    if (_orbitDragging){ _orbitOffsetX += x - _orbitLastX; _orbitOffsetY += y - _orbitLastY; _orbitLastX = x; _orbitLastY = y; drawOrbitView(); }
+    else { hoverOrbitPlanet(x, y); }
+  });
+  canvas.addEventListener('mouseup', () => _orbitDragging = false);
+  canvas.addEventListener('mouseleave', () => _orbitDragging = false);
+  canvas.addEventListener('dblclick', e => { selectOrbitPlanet(_cc(e).x, _cc(e).y); });
+}
+
+function drawOrbitView(){
+  const canvas = _orbitCanvas, ctx = _orbitCtx;
+  if (!canvas || !ctx) return;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const positions = _computeOrbitPositions();
+  const center = state.planets.find(p => p._type === 'Center');
+  if (!center) return;
+  const cx = W / 2 + _orbitOffsetX, cy = H / 2 + _orbitOffsetY;
+
+  // Recompute scales for orbit drawing
+  const orbitScales = {};
+  const allOrbits = state.planets.filter(p => p.ORBIT_DATA && (p.ORBIT_DATA.semiMajorAxis || p.ORBIT_DATA.orbitData));
+  const maxOrbit = Math.max(1, ...allOrbits.map(p => p.ORBIT_DATA.semiMajorAxis || p.ORBIT_DATA.orbitData || 100000));
+  const globalScale = Math.min(W, H) * 0.38 * _orbitScale / maxOrbit;
+  orbitScales[center._id] = globalScale;
+  state.planets.forEach(p => {
+    const od = p.ORBIT_DATA;
+    if (!od || !od.parent) return;
+    const parentBody = state.planets.find(q => q.name === od.parent);
+    if (!parentBody) return;
+    const parentScale = orbitScales[parentBody._id] || globalScale;
+    orbitScales[p._id] = parentBody && parentBody._type !== 'Center' ? Math.max(globalScale * 0.15, parentScale * 0.25) : globalScale;
+  });
+
+  // Draw orbits
+  state.planets.forEach(p => {
+    const od = p.ORBIT_DATA;
+    if (!od || !od.parent) return;
+    const parentBody = state.planets.find(q => q.name === od.parent);
+    if (!parentBody) return;
+    const parentPos = positions[parentBody._id];
+    if (!parentPos) return;
+    const sma = (od.semiMajorAxis || od.orbitData || 100000);
+    const ecc = od.eccentricity || 0;
+    const angle = od.argumentOfPeriapsis || 0;
+    const scale = orbitScales[p._id] || globalScale;
+    const a = sma * scale;
+    const b = a * Math.sqrt(1 - ecc * ecc);
+    ctx.save();
+    ctx.translate(parentPos.x, parentPos.y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.ellipse(-a * ecc, 0, a, b, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(150,150,150,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Draw center star
+  const centerR = Math.max(4, Math.min(20, Math.log10(center.BASE_DATA.radius / 10000) * 3));
+  ctx.beginPath(); ctx.arc(cx, cy, centerR, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFD700'; ctx.fill();
+  ctx.shadowBlur = 15; ctx.shadowColor = '#FFD700'; ctx.fill(); ctx.shadowBlur = 0;
+
+  // Draw planets
+  state.planets.forEach(p => {
+    if (p._type === 'Center') return;
+    const pos = positions[p._id];
+    if (!pos) return;
+    const pr = Math.max(2, Math.min(10, Math.log10(p.BASE_DATA.radius / 1000) * 1.5));
+    const mc = p.BASE_DATA.mapColor;
+    ctx.beginPath(); ctx.arc(pos.x, pos.y, pr, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgb(' + Math.round(mc.r * 255) + ',' + Math.round(mc.g * 255) + ',' + Math.round(mc.b * 255) + ')';
+    ctx.fill();
+    ctx.fillStyle = '#333'; ctx.font = '10px sans-serif';
+    ctx.fillText(p.name, pos.x + pr + 3, pos.y + 3);
+  });
+}
+
+function hoverOrbitPlanet(mx, my){
+  // Could show tooltip in future
+}
+
+function _computeOrbitPositions(){
+  const W = _orbitCanvas.width, H = _orbitCanvas.height;
+  const cx = W / 2 + _orbitOffsetX, cy = H / 2 + _orbitOffsetY;
+  const center = state.planets.find(p => p._type === 'Center');
+  if (!center) return {};
+  const positions = {}, orbitScales = {};
+  const allOrbits = state.planets.filter(p => p.ORBIT_DATA && (p.ORBIT_DATA.semiMajorAxis || p.ORBIT_DATA.orbitData));
+  const maxOrbit = Math.max(1, ...allOrbits.map(p => p.ORBIT_DATA.semiMajorAxis || p.ORBIT_DATA.orbitData || 100000));
+  const globalScale = Math.min(W, H) * 0.38 * _orbitScale / maxOrbit;
+  positions[center._id] = { x: cx, y: cy };
+  orbitScales[center._id] = globalScale;
+  let changed = true, iterations = 0;
+  while (changed && iterations < 10){
+    changed = false; iterations++;
+    state.planets.forEach(p => {
+      if (positions[p._id]) return;
+      const od = p.ORBIT_DATA;
+      if (!od || !od.parent) return;
+      const parentBody = state.planets.find(q => q.name === od.parent);
+      if (!parentBody) return;
+      const parentPos = positions[parentBody._id];
+      if (!parentPos) return;
+      const parentScale = parentBody && parentBody._type !== 'Center' ? orbitScales[parentBody._id] * 0.15 : globalScale;
+      orbitScales[p._id] = parentScale;
+      const sma = (od.semiMajorAxis || od.orbitData || 100000);
+      const ecc = od.eccentricity || 0;
+      const angle = od.argumentOfPeriapsis || 0;
+      const a = sma * parentScale;
+      const b = a * Math.sqrt(1 - ecc * ecc);
+      const pa = (state._orbitAnimPhase || 0) + (p._id.charCodeAt(2) % 360) * Math.PI / 180;
+      const px = parentPos.x + Math.cos(pa) * a * Math.cos(angle) - Math.sin(pa) * b * Math.sin(angle) - a * ecc * Math.cos(angle);
+      const py = parentPos.y + Math.cos(pa) * a * Math.sin(angle) + Math.sin(pa) * b * Math.cos(angle) - a * ecc * Math.sin(angle);
+      positions[p._id] = { x: px, y: py };
+      changed = true;
+    });
+  }
+  return positions;
+}
+
+function selectOrbitPlanet(mx, my){
+  const positions = _computeOrbitPositions();
+  for (const p of state.planets){
+    if (p._type === 'Center') continue;
+    const pos = positions[p._id];
+    if (!pos) continue;
+    const pr = Math.max(2, Math.min(10, Math.log10(p.BASE_DATA.radius / 1000) * 1.5));
+    const dx = mx - pos.x, dy = my - pos.y;
+    if (dx * dx + dy * dy < (pr + 6) * (pr + 6)){
+      selectPlanet(p._id);
+      switchTab('base');
+      showToast('已选中: ' + p.name);
+      return;
+    }
+  }
+}
+
+/* ============================================================
    INIT
 ============================================================ */
 function init(){
   renderTree();
   updateResponsive();
+  openAssetDB().then(countAssets).catch(()=>{});
 }
 init();
 </script>
