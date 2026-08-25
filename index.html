@@ -418,6 +418,12 @@ const state = {
 const AUTOSAVE_KEY = 'sfs-planet-pack-generator.autosave.v1';
 let _autosaveTimer = 0;
 
+window.addEventListener('beforeunload', function(event){
+  if (!state.planets.length) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 function projectSnapshot(){
   return {
     type: 'sfs-planet-pack-project', appVersion: '1.0', savedAt: new Date().toISOString(),
@@ -457,6 +463,20 @@ function restoreAutosave(){
 let _idc = 0;
 function uid(){ return 'b' + (++_idc) + '_' + Math.random().toString(36).slice(2,7); }
 function currentPlanet(){ return state.planets.find(p => p._id === state.activeId) || null; }
+function clearPreviewPanels(){
+  if (terrainView && terrainView.frame) cancelAnimationFrame(terrainView.frame);
+  if (typeof terrainView !== 'undefined') {
+    terrainView.bodyId = null; terrainView.xMin = null; terrainView.xMax = null; terrainView.yMin = null; terrainView.yMax = null; terrainView.dragging = false; terrainView.frame = 0;
+  }
+  if (typeof terrainSampleCache !== 'undefined') terrainSampleCache = { key:'', elevations:null, missing:[], unsupported:[] };
+  if (typeof _orbitFrame !== 'undefined' && _orbitFrame) cancelAnimationFrame(_orbitFrame);
+  if (typeof _orbitFrame !== 'undefined') _orbitFrame = 0;
+  if (typeof _orbitCanvas !== 'undefined') _orbitCanvas = null;
+  if (typeof _orbitCtx !== 'undefined') _orbitCtx = null;
+  var rightPanel = document.getElementById('rightPanel'), rightContent = document.getElementById('rightPanelContent');
+  if (rightContent) rightContent.innerHTML = '';
+  if (rightPanel) rightPanel.style.display = 'none';
+}
 
 /* ============================================================
    TABS
@@ -1068,7 +1088,7 @@ function renderActiveTab(){
   const el = document.getElementById('tabContent');
   const rpEl = document.getElementById('rightPanel');
   const rpContent = document.getElementById('rightPanelContent');
-  if (!p){ el.innerHTML = ''; rpEl.style.display='none'; rpContent.innerHTML=''; return; }
+  if (!p){ el.innerHTML = ''; clearPreviewPanels(); return; }
 
   // 右侧仅显示星球数据、真实地形轮廓与轨道预览。
   rpEl.style.display = '';
@@ -2044,6 +2064,7 @@ function newProject(){
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('editorContent').style.display = 'block';
   renderEditor();
+  scheduleAutosave();
   showToast('已创建新项目 (Sun 中心天体)');
 }
 function showAddBodyModal(){
@@ -2080,6 +2101,7 @@ function addBody(){
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('editorContent').style.display = 'block';
   renderEditor();
+  scheduleAutosave();
   showToast('已添加天体: ' + name);
 }
 function duplicatePlanet(id){
@@ -2094,6 +2116,7 @@ function duplicatePlanet(id){
   state.activeId = copy._id;
   renderTree();
   renderEditor();
+  scheduleAutosave();
   showToast('已复制: ' + n);
 }
 function deletePlanet(id){
@@ -2117,12 +2140,16 @@ function deletePlanet(id){
   state.planets = state.planets.filter(q => !toDelete.has(q._id));
   if (toDelete.has(state.activeId)) state.activeId = state.planets.length ? state.planets[0]._id : null;
   if (state.planets.length === 0){
+    state.activeId = null;
+    state.activeTab = 'base';
+    clearPreviewPanels();
     document.getElementById('editorContent').style.display = 'none';
     document.getElementById('emptyState').style.display = 'block';
   } else {
     renderEditor();
   }
   renderTree();
+  scheduleAutosave();
   showToast('已删除 '+count+' 个天体');
 }
 
@@ -2324,9 +2351,9 @@ function getNestedString(data, path){
   }
   return typeof value === 'string' ? value.trim() : '';
 }
-function collectReferencedTextures(){
+function collectReferencedTextures(planets){
   var references = new Map();
-  state.planets.forEach(function(planet){
+  (planets || state.planets).forEach(function(planet){
     TEXTURE_FIELDS.forEach(function(path){
       var value = getNestedString(planet, path);
       if (!value || value === 'None') return;
@@ -2336,6 +2363,33 @@ function collectReferencedTextures(){
     });
   });
   return references;
+}
+function getExportPlanets(){
+  var planets = state.planets.slice(), byName = new Map(planets.map(function(planet){ return [planet.name, planet]; }));
+  var appended = [], missingParents = [];
+  if (!state.packInfo.includeDefaultPlanets){
+    for (var index = 0; index < planets.length; index++){
+      var planet = planets[index], parentName = planet.ORBIT_DATA && planet.ORBIT_DATA.parent;
+      if (!parentName || byName.has(parentName)) continue;
+      if (typeof state.builtinPlanets[parentName] !== 'string') { missingParents.push(parentName); continue; }
+      var dependency = buildPlanetFromCatalog(parentName, parentName, undefined);
+      planets.push(dependency); byName.set(dependency.name, dependency); appended.push(dependency.name);
+    }
+  }
+  if (missingParents.length) throw new Error('无法导出：缺少父级天体 ' + Array.from(new Set(missingParents)).join('、') + '。请先添加它们，或开启“包含默认行星”。');
+  return { planets:planets, appended:appended };
+}
+function getSpaceCenterForExport(planets){
+  var names = new Set(planets.map(function(planet){ return planet.name; }));
+  var address = String(state.spaceCenter.address || '').trim();
+  if (!address || (!names.has(address) && !state.packInfo.includeDefaultPlanets)){
+    var fallback = planets.find(function(planet){ return planet.name === 'Earth'; }) || planets.find(function(planet){ return planet.ORBIT_DATA && planet.ORBIT_DATA.parent; });
+    if (!fallback) throw new Error('无法导出：空间中心未指向可用天体。请在“导出”页选择已添加的星球。');
+    address = fallback.name;
+  }
+  var output = JSON.parse(JSON.stringify(state.spaceCenter));
+  output.address = address;
+  return output;
 }
 function requestResult(request){
   return new Promise(function(resolve, reject){ request.onsuccess = function(){ resolve(request.result); }; request.onerror = function(){ reject(request.error); }; });
@@ -2375,7 +2429,9 @@ async function exportPlanetPack(){
   if (state.planets.length === 0){ showToast('没有天体可导出', 'error'); return; }
   try {
     var pi = state.packInfo;
-    var references = collectReferencedTextures();
+    var exportResolution = getExportPlanets(), exportPlanets = exportResolution.planets;
+    var spaceCenterForExport = getSpaceCenterForExport(exportPlanets);
+    var references = collectReferencedTextures(exportPlanets);
     var cachedTextures = await getCachedTextures();
     var texturesToWrite = [], missing = [];
     references.forEach(function(reference, key){
@@ -2385,7 +2441,7 @@ async function exportPlanetPack(){
       else if (!defaultAvailable) missing.push(reference.name + '（'+reference.uses.join('；')+'）');
     });
     var heightmapNames = new Set();
-    state.planets.forEach(function(planet){
+    exportPlanets.forEach(function(planet){
       var lines = getNormalTerrainFormulaLines(planet.TERRAIN_DATA);
       terrainFormulaOperations(lines).forEach(function(operation){ if (operation.type === 'AddHeightMap') heightmapNames.add(operation.name); });
     });
@@ -2402,12 +2458,13 @@ async function exportPlanetPack(){
     if (unavailableHeightmaps.length) messages.push('缺失自定义高度图：'+unavailableHeightmaps.join('、'));
     if (missing.length) messages.push('缺失贴图：\n'+missing.join('\n'));
     if (!pi.includeDefaultHeightmaps && builtinHeightmapsUsed.length) messages.push('未加载游戏默认高度图；已随包写入内置副本。');
+    if (exportResolution.appended.length) messages.push('为保持轨道与空间中心有效，已补全父级天体：'+exportResolution.appended.join('、'));
     messages.push('确认导出？');
     if (!confirm(messages.join('\n\n'))) return;
     const JSZip = await loadJSZip();
     const zip = new JSZip();
 
-    state.planets.forEach(p => {
+    exportPlanets.forEach(p => {
       zip.file('Planet Data/' + exportPlanetFileName(p) + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
     });
     zip.file('Import_Settings.txt', JSON.stringify({
@@ -2419,7 +2476,7 @@ async function exportPlanetPack(){
       version: pi.version || 'n/a',
       description: pi.description || 'n/a'
     }, null, 2));
-    zip.file('Space_Center_Data.txt', JSON.stringify(state.spaceCenter, null, 2));
+    zip.file('Space_Center_Data.txt', JSON.stringify(spaceCenterForExport, null, 2));
     zip.file('Version.txt', '1.6.00.18');
     zip.folder('Heightmap Data');
     zip.folder('Texture Data');
