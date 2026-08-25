@@ -2,16 +2,41 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const server = http.createServer((req, res) => {
-    const filePath = path.join('/workspace', req.url === '/' ? '/sfs-planet-pack-generator.html' : decodeURIComponent(req.url));
-    const ext = path.extname(filePath).toLowerCase();
-    const contentTypes = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json' };
+const ROOT = __dirname;
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.tga': 'image/x-tga'
+};
 
-    fs.readFile(filePath, (err, data) => {
-        if (err) { res.writeHead(404); res.end('Not found'); return; }
-        res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain', 'Access-Control-Allow-Origin': '*' });
-        res.end(data);
-    });
+const server = http.createServer((req, res) => {
+  const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  const requested = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const filePath = path.resolve(ROOT, requested);
+
+  if (!filePath.startsWith(ROOT + path.sep) && filePath !== ROOT) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
+  fs.readFile(filePath, (error, data) => {
+    if (error) {
+      res.writeHead(error.code === 'ENOENT' ? 404 : 500);
+      res.end(error.code === 'ENOENT' ? 'Not found' : 'Server error');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': CONTENT_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
+    res.end(data);
+  });
 });
 
-server.listen(8080, '0.0.0.0', () => console.log('Server running at http://0.0.0.0:8080/'));
+const port = Number(process.env.PORT) || 8080;
+server.listen(port, '0.0.0.0', () => console.log(`Server running at http://0.0.0.0:${port}/`));

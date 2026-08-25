@@ -201,6 +201,7 @@ select{cursor:pointer;}
     <div class="spacer"></div>
     <span class="asset-info" id="assetInfo" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
     <button class="btn" onclick="showTextureCreator()">纹理创建</button>
+    <button class="btn" onclick="document.getElementById('textureFiles').click()">导入贴图</button>
     <button class="btn" onclick="showAssetManager()">资源管理</button>
     <button class="btn" onclick="saveProject()">保存项目</button>
     <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
@@ -208,6 +209,7 @@ select{cursor:pointer;}
     <button class="btn btn-primary" onclick="exportPlanetPack()">导出行星包</button>
     <input type="file" id="projFile" accept=".sfsproj,.json" style="display:none" onchange="openProject(event)">
     <input type="file" id="packFiles" accept=".txt,.json" multiple style="display:none" onchange="importPackFiles(event)">
+    <input type="file" id="textureFiles" accept="image/png,image/jpeg,image/webp,image/bmp,image/tga" multiple style="display:none" onchange="importTextureFiles(event)">
   </div>
 
   <div class="main-grid">
@@ -295,7 +297,9 @@ select{cursor:pointer;}
   <div class="modal" style="max-width:520px;">
     <h2>资源缓存管理</h2>
     <div id="assetStats" style="margin-bottom:14px;font-size:0.9rem;"></div>
+    <div id="assetTextureList" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;font-family:monospace;font-size:0.82rem;"></div>
     <div class="modal-actions">
+      <button class="btn" onclick="document.getElementById('textureFiles').click()">导入贴图</button>
       <button class="btn" onclick="closeModal('assetModal')">关闭</button>
       <button class="btn" onclick="clearAssetCache()">清除全部缓存</button>
     </div>
@@ -379,6 +383,10 @@ const state = {
     }
   },
   assetCache: { textures: 0, presets: 0 },
+  heightmaps: {},
+  heightmapSources: {},
+  builtinHeightmapNames: new Set(['Perlin']),
+  heightmapLoadState: 'loading',
   _orbitViewMode: 'children'
 };
 
@@ -427,6 +435,16 @@ const DEFAULT_FRONT_CLOUDS = {
   cloudsTexture:'Earth_Clouds_Front', cloudTextureCutout:1, fadeZoneHeight:5000,
   height:50000, positionZ:0, sharpenAlpha:false
 };
+const BUILTIN_TEXTURES = new Set([
+  'Ariel','Callisto','Ceres','Charon','Deimos','Dione','Earth_WithOceans','Earth_Clouds_Front','Earth_OceanMask_V2','Enceladus','Europa','Ganymede','Hydra','Iapetus','Io','Jupiter','Mars','Mercury','Mimas','Miranda','Moon','Naiad','Asteroid','Neptune','Nix','Oberon','Pan','Phobos','Pluto','Proteus','Puck','Rhea','Saturn','Sun','Tethys','Thebe','Titan','Titan_LakeMask','Titania','Triton','Umbriel','Uranus','Venus','Venus_Clouds_Front',
+  'Dark_Dust','DarkDust02','Dots02','HardRocks02','Circles02','Blured02','Snow','Ice02','DryGround','Sand','Neutral','None',
+  'Atmo_Earth','Atmo_Jupiter','Atmo_Mars','Atmo_Venus','Atmo_Sun','Atmo_Enceladus','Atmo_Saturn','Atmo_Europa','Atmo_Triton','Atmo_Uranus','Atmo_Neptune','Atmo_Pluto','Atmo_Titan','Earth_Clouds','Saturn_Rings'
+]);
+const TEXTURE_FIELDS = [
+  ['ATMOSPHERE_VISUALS_DATA','GRADIENT','texture'], ['ATMOSPHERE_VISUALS_DATA','CLOUDS','texture'], ['FRONT_CLOUDS_DATA','cloudsTexture'],
+  ['TERRAIN_DATA','TERRAIN_TEXTURE_DATA','planetTexture'], ['TERRAIN_DATA','TERRAIN_TEXTURE_DATA','surfaceTexture_A'], ['TERRAIN_DATA','TERRAIN_TEXTURE_DATA','surfaceTexture_B'], ['TERRAIN_DATA','TERRAIN_TEXTURE_DATA','terrainTexture_C'],
+  ['WATER_DATA','oceanMaskTexture'], ['RINGS_DATA','ringsTexture']
+];
 const DEFAULT_WATER = {
   oceanMaskTexture:'Earth_OceanMask_V2', lowerTerrain:false, oceanDepth:1000,
   sand:{r:0.76,g:0.7,b:0.5,a:1}, floor:{r:0.1,g:0.2,b:0.3,a:1},
@@ -449,7 +467,7 @@ const TEMPLATES = [
   { name:'Sun',    radius:34817000, gravity:247,   atmo:false, parent:null,      rings:false, sma:0,            color:{r:1,g:0.85,b:0.2},    texture:'Sun',      isStar:true,  isGas:false },
   { name:'Mercury',radius:120000,   gravity:3.27,  atmo:false, parent:'Sun',      sma:57900000000,  color:{r:0.5,g:0.45,b:0.4},  texture:'Mercury' },
   { name:'Venus',  radius:300000,   gravity:8.87,  atmo:true,  parent:'Sun',      sma:108200000000, color:{r:0.85,g:0.7,b:0.4},  texture:'Venus',   atmoH:250000, atmoD:0.465 },
-  { name:'Earth',  radius:314970,   gravity:9.8,   atmo:true,  parent:'Sun',      sma:149600000000, color:{r:0.25,g:0.5,b:0.9},  texture:'Earth',   atmoH:40000,  atmoD:0.005 },
+  { name:'Earth',  radius:314970,   gravity:9.8,   atmo:true,  parent:'Sun',      sma:149600000000, color:{r:0.25,g:0.5,b:0.9},  texture:'Earth_WithOceans',   atmoH:40000,  atmoD:0.005 },
   { name:'Mars',   radius:169500,   gravity:3.61,  atmo:true,  parent:'Sun',      sma:227900000000, color:{r:0.75,g:0.35,b:0.2}, texture:'Mars',    atmoH:11000,  atmoD:0.019 },
   { name:'Jupiter',radius:3500000,  gravity:24.8,  atmo:true,  parent:'Sun',      sma:778500000000, color:{r:0.8,g:0.65,b:0.45}, texture:'Jupiter', isGas:true, atmoH:200000, atmoD:0.5 },
   { name:'Saturn', radius:2911600,  gravity:10.44, atmo:true,  parent:'Sun',      rings:true, sma:1433500000000, color:{r:0.85,g:0.75,b:0.55}, texture:'Saturn', isGas:true, atmoH:200000, atmoD:0.5 },
@@ -507,10 +525,10 @@ function buildSkeleton(name, parentName){
     FRONT_CLOUDS_DATA: null,
     TERRAIN_DATA: {
       TERRAIN_TEXTURE_DATA: {
-        planetTexture: 'Earth', planetTextureCutout: 1, planetTextureRotation: 0, planetTextureDontDistort: false,
-        surfaceTexture_A: 'Blured', surfaceTextureSize_A: { x:20, y:8 },
+        planetTexture: 'Earth_WithOceans', planetTextureCutout: 1, planetTextureRotation: 0, planetTextureDontDistort: false,
+        surfaceTexture_A: 'Blured02', surfaceTextureSize_A: { x:20, y:8 },
         surfaceTexture_B: 'None', surfaceTextureSize_B: { x:-1, y:-1 },
-        terrainTexture_C: 'Blured', terrainTextureSize_C: { x:100, y:30 },
+        terrainTexture_C: 'Neutral', terrainTextureSize_C: { x:100, y:30 },
         surfaceLayerSize: 40, minFade: 0, maxFade: 1, shadowIntensity: 6, shadowHeight: 15
       },
       terrainFormulaDifficulties: { Normal: [
@@ -1139,8 +1157,9 @@ function renderTerrain(p){
     row(numField('TERRAIN_DATA.verticeSize','顶点大小',t.verticeSize,0.1,'地形分辨率，越小越精细但大行星可能卡顿') +
         '<div class="form-group"></div>');
 
-  html += section('地形公式 (Normal)') +
-    formulaEditorHTML('TERRAIN_DATA.terrainFormulaDifficulties.Normal','公式列表',t.terrainFormulaDifficulties && t.terrainFormulaDifficulties.Normal,TERRAIN_FUNC_TYPES,'如 OUTPUT = AddHeightMap(Perlin,19030,35)');
+  const formulaKey = getNormalTerrainFormulaKey(t);
+  html += section('地形公式 (' + formulaKey + ')') +
+    formulaEditorHTML('TERRAIN_DATA.terrainFormulaDifficulties.'+formulaKey,'公式列表',getNormalTerrainFormulaLines(t),TERRAIN_FUNC_TYPES,'如 OUTPUT = AddHeightMap(Perlin,19030,35)');
 
   html += section('贴图公式') +
     formulaEditorHTML('TERRAIN_DATA.textureFormula','贴图公式',t.textureFormula,TEXTURE_FUNC_TYPES,'纹理跟随地形形状');
@@ -1324,11 +1343,12 @@ function renderPreview(p){
       (p.WATER_DATA ? infoItem('水体', '已启用') : '') +
     '</div>' +
     '<div style="width:100%;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;">'+
         '<div class="section-title" style="margin:0;border:0;padding:0;">地形预览 (极坐标轮廓)</div>'+
-        '<button class="btn btn-sm" onclick="drawTerrainPreview()">刷新地形</button>'+
+        '<div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="zoomTerrainPreview(0.8)">放大</button><button class="btn btn-sm" onclick="zoomTerrainPreview(1.2)">缩小</button><button class="btn btn-sm" onclick="resetTerrainPreview()">复位</button></div>'+
       '</div>'+
       '<canvas id="terrainPreviewCanvas" width="400" height="300" style="border:1px solid var(--border);border-radius:var(--radius);max-width:100%;height:auto;background:#fff;"></canvas>'+
+      '<div id="terrainPreviewStatus" class="help-text" style="margin-top:6px;"></div>'+
     '</div>'+
     '<div style="width:100%"><div class="section-title">JSON 预览</div><div class="json-preview" id="jsonPreview"></div></div>' +
   '</div>';
@@ -1343,179 +1363,197 @@ function typeLabel(p){
 }
 
 /* ============================================================
-   TERRAIN PREVIEW (POLAR CONTOUR)
+   TERRAIN PREVIEW (POLAR CONTOUR — matched to ZIP terrain_preview.py)
 ============================================================ */
+var terrainView = { bodyId:null, xMin:null, xMax:null, yMin:null, yMax:null, dragging:false, start:null, startView:null, frame:0 };
+var terrainSampleCache = { key:'', elevations:null, missing:[] };
+
+function getNormalTerrainFormulaLines(terrainData){
+  var difficulties = terrainData && terrainData.terrainFormulaDifficulties;
+  if (!difficulties || typeof difficulties !== 'object') return [];
+  var key = getNormalTerrainFormulaKey(terrainData);
+  return Array.isArray(difficulties[key]) ? difficulties[key] : [];
+}
+function getNormalTerrainFormulaKey(terrainData){
+  var difficulties = terrainData && terrainData.terrainFormulaDifficulties;
+  if (!difficulties || typeof difficulties !== 'object') return 'Normal';
+  var key = Object.keys(difficulties).find(function(name){ return name !== 'Normal' && name.toLowerCase() === 'normal' && Array.isArray(difficulties[name]) && difficulties[name].length; });
+  if (key) return key;
+  return 'Normal';
+}
+
+function terrainFormulaOperations(lines){
+  var operations = [];
+  (lines || []).forEach(function(raw){
+    var line = String(raw || '').trim();
+    var heightmap = line.match(/^OUTPUT\s*=\s*AddHeightMap\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)$/i);
+    if (heightmap){
+      var lengthM = parseFloat(heightmap[2]), heightM = parseFloat(heightmap[3]);
+      if (Number.isFinite(lengthM) && Number.isFinite(heightM)) operations.push({ type:'AddHeightMap', name:heightmap[1].trim(), lengthM:lengthM, heightM:heightM });
+      return;
+    }
+    var additive = line.match(/^OUTPUT\s*=\s*Add\(\s*([^)]+?)\s*\)$/i);
+    if (additive){
+      var value = parseFloat(additive[1]);
+      if (Number.isFinite(value)) operations.push({ type:'Add', heightM:value });
+    }
+  });
+  return operations;
+}
+
+function getTerrainSamples(planet, count, formulas){
+  var key = [planet._id, count, JSON.stringify(formulas || []), Object.keys(state.heightmaps || {}).length].join('|');
+  if (terrainSampleCache.key === key && terrainSampleCache.elevations) return terrainSampleCache;
+  var operations = terrainFormulaOperations(formulas), missing = [], elevations = new Array(count).fill(0);
+  operations.forEach(function(operation){
+    if (operation.type === 'Add'){
+      for (var a = 0; a < count; a++) elevations[a] += operation.heightM;
+      return;
+    }
+    var points = state.heightmaps[operation.name];
+    if (!Array.isArray(points) || points.length < 2){ missing.push(operation.name); return; }
+    var period = operation.lengthM / Math.max(1, planet.BASE_DATA.radius || 1);
+    if (!Number.isFinite(period) || period <= 0) return;
+    for (var i = 0; i < count; i++){
+      var degree = i * 360 / count;
+      var phase = ((-degree * Math.PI / 180) % period + period) % period;
+      var index = phase / period * (points.length - 1);
+      var left = Math.floor(index), right = Math.min(left + 1, points.length - 1), fraction = index - left;
+      elevations[i] += (points[left] * (1 - fraction) + points[right] * fraction) * operation.heightM;
+    }
+  });
+  terrainSampleCache = { key:key, elevations:elevations, missing:missing };
+  return terrainSampleCache;
+}
+function isBuiltinHeightmap(name){ return state.builtinHeightmapNames.has(String(name || '')); }
+
+function scheduleTerrainPreviewDraw(){
+  if (terrainView.frame) return;
+  terrainView.frame = requestAnimationFrame(function(){ terrainView.frame = 0; drawTerrainPreview(); });
+}
+
+function ensureTerrainView(radius, bodyId){
+  if (terrainView.bodyId === bodyId && terrainView.xMin !== null) return;
+  var limit = radius * 2;
+  terrainView.bodyId = bodyId;
+  terrainView.xMin = -limit; terrainView.xMax = limit;
+  terrainView.yMin = -limit; terrainView.yMax = limit;
+  terrainView.dragging = false;
+}
+
+function resetTerrainPreview(){
+  var p = currentPlanet(); if (!p) return;
+  var limit = (p.BASE_DATA.radius || 1) * 2;
+  terrainView.bodyId = p._id;
+  terrainView.xMin = -limit; terrainView.xMax = limit;
+  terrainView.yMin = -limit; terrainView.yMax = limit;
+  drawTerrainPreview();
+}
+
+function zoomTerrainPreview(factor, anchor){
+  var p = currentPlanet(); if (!p) return;
+  ensureTerrainView(p.BASE_DATA.radius || 1, p._id);
+  var cx = anchor ? anchor.x : (terrainView.xMin + terrainView.xMax) / 2;
+  var cy = anchor ? anchor.y : (terrainView.yMin + terrainView.yMax) / 2;
+  terrainView.xMin = cx - (cx - terrainView.xMin) * factor;
+  terrainView.xMax = cx + (terrainView.xMax - cx) * factor;
+  terrainView.yMin = cy - (cy - terrainView.yMin) * factor;
+  terrainView.yMax = cy + (terrainView.yMax - cy) * factor;
+  drawTerrainPreview();
+}
+
+function bindTerrainPreviewCanvas(canvas){
+  if (!canvas || canvas.dataset.bound === '1') return;
+  canvas.dataset.bound = '1';
+  function toWorld(event, view){
+    view = view || terrainView;
+    var rect = canvas.getBoundingClientRect();
+    var x = (event.clientX - rect.left) * canvas.width / rect.width;
+    var y = (event.clientY - rect.top) * canvas.height / rect.height;
+    return {
+      x: view.xMin + x / canvas.width * (view.xMax - view.xMin),
+      y: view.yMax - y / canvas.height * (view.yMax - view.yMin)
+    };
+  }
+  canvas.addEventListener('wheel', function(event){
+    event.preventDefault();
+    zoomTerrainPreview(event.deltaY < 0 ? 0.8 : 1.2, toWorld(event));
+  }, { passive:false });
+  canvas.addEventListener('mousedown', function(event){
+    terrainView.dragging = true;
+    terrainView.start = toWorld(event);
+    terrainView.startView = { xMin:terrainView.xMin, xMax:terrainView.xMax, yMin:terrainView.yMin, yMax:terrainView.yMax };
+  });
+  canvas.addEventListener('mousemove', function(event){
+    if (!terrainView.dragging) return;
+    var base = terrainView.startView, now = toWorld(event, base), start = terrainView.start;
+    var dx = start.x - now.x, dy = start.y - now.y;
+    terrainView.xMin = base.xMin + dx; terrainView.xMax = base.xMax + dx;
+    terrainView.yMin = base.yMin + dy; terrainView.yMax = base.yMax + dy;
+    scheduleTerrainPreviewDraw();
+  });
+  ['mouseup','mouseleave'].forEach(function(type){ canvas.addEventListener(type, function(){ terrainView.dragging = false; }); });
+}
+
 function drawTerrainPreview(){
   var canvas = document.getElementById('terrainPreviewCanvas');
   if (!canvas) return;
   var p = currentPlanet(); if (!p) return;
-  var ctx = canvas.getContext('2d');
-  var W = canvas.width, H = canvas.height;
-  var cx = W / 2, cy = H / 2;
-  var baseR = 100; // base planet radius in pixels
+  var ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  var radius = Math.max(1, p.BASE_DATA.radius || 1);
+  ensureTerrainView(radius, p._id); bindTerrainPreviewCanvas(canvas);
+  var xRange = terrainView.xMax - terrainView.xMin, yRange = terrainView.yMax - terrainView.yMin;
+  var availableW = W - 22, availableH = H - 22;
+  var pxPerM = Math.min(availableW / xRange, availableH / yRange);
+  var drawingW = xRange * pxPerM, drawingH = yRange * pxPerM;
+  var insetX = 11 + (availableW - drawingW) / 2, insetY = 11 + (availableH - drawingH) / 2;
+  var toCanvas = function(x, y){ return { x:insetX + (x - terrainView.xMin) * pxPerM, y:insetY + (terrainView.yMax - y) * pxPerM }; };
+  var viewScale = Math.max(xRange, yRange) / (radius * 2);
+  var count = Math.min(7200, Math.max(360, Math.floor(360 * viewScale)));
+  var formulas = getNormalTerrainFormulaLines(p.TERRAIN_DATA);
+  var samples = getTerrainSamples(p, count, formulas), missing = samples.missing, elevations = samples.elevations;
 
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, W, H);
-
-  var radius = p.BASE_DATA.radius || 200000;
-  var formulas = (p.TERRAIN_DATA.terrainFormulaDifficulties && p.TERRAIN_DATA.terrainFormulaDifficulties.Normal) || [];
-  var seed = (p.name || '').length;
-
-  // Parse formula items to get amplitude multipliers
-  var ampSum = 0;
-  formulas.forEach(function(line){
-    var parsed = parseFormulaLine(line);
-    if (parsed && parsed.params.length >= 2){
-      var amp = parseFloat(parsed.params[1]) || 0;
-      ampSum += amp;
-    }
-  });
-  var maxTerrainPx = Math.min(60, ampSum * 0.003 + 10); // scale to pixel range
-
-  // Generate terrain heights using Perlin noise
-  var N = 360;
-  var heights = [];
-  for (var i = 0; i < N; i++){
-    var angle = (i / N) * Math.PI * 2;
-    var nx = Math.cos(angle) * 2;
-    var ny = Math.sin(angle) * 2;
-    var n = _noise(nx, ny, seed, 4, 0.5); // 0~1
-    // Add larger-scale variation
-    var n2 = _noise(nx * 0.5, ny * 0.5, seed + 42, 2, 0.5);
-    // Combine: base noise + secondary for variety
-    var h = n * 0.7 + n2 * 0.3; // 0~1
-    heights.push(h);
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  var origin = toCanvas(0, 0);
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 1; ctx.setLineDash([2,3]);
+  ctx.beginPath(); ctx.moveTo(11, origin.y); ctx.lineTo(W - 11, origin.y); ctx.moveTo(origin.x, 11); ctx.lineTo(origin.x, H - 11); ctx.stroke(); ctx.setLineDash([]);
+  var drawCircle = function(radialM, color, dash){
+    var point = toCanvas(0, 0), radialPx = radialM * pxPerM;
+    if (radialPx < 1 || radialPx > Math.max(W,H) * 2) return;
+    ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.arc(point.x, point.y, radialPx, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  };
+  var rings = p.RINGS_DATA;
+  if (rings && rings.endRadius > rings.startRadius && rings.startRadius > 0){
+    var outer = toCanvas(0,0).x + rings.endRadius * pxPerM, inner = toCanvas(0,0).x + rings.startRadius * pxPerM, center = toCanvas(0,0);
+    var rc = rings.mapColor || {r:0.5,g:0.5,b:0.5,a:0.5};
+    ctx.fillStyle = 'rgba('+Math.round((rc.r || 0)*255)+','+Math.round((rc.g || 0)*255)+','+Math.round((rc.b || 0)*255)+','+Math.min(0.35, rc.a == null ? 0.2 : rc.a * 0.35)+')';
+    ctx.beginPath(); ctx.arc(center.x, center.y, rings.endRadius * pxPerM, 0, Math.PI * 2); ctx.arc(center.x, center.y, rings.startRadius * pxPerM, 0, Math.PI * 2, true); ctx.fill('evenodd');
+    drawCircle(rings.startRadius, 'rgba(88,88,88,0.75)', [5,3]); drawCircle(rings.endRadius, 'rgba(88,88,88,0.75)', [5,3]);
   }
-
-  // Get reference heights (in meters)
-  var atmoH = p.ATMOSPHERE_PHYSICS_DATA ? p.ATMOSPHERE_PHYSICS_DATA.height : 0;
-  var twH = p.BASE_DATA.timewarpHeight || 0;
-  var waterH = p.WATER_DATA ? (p.WATER_DATA.oceanDepth || 0) : 0;
-  var ringStart = p.RINGS_DATA ? p.RINGS_DATA.startRadius : 0;
-  var ringEnd = p.RINGS_DATA ? p.RINGS_DATA.endRadius : 0;
-
-  // Scale factor: maps meters to pixels relative to baseR
-  // radius meters = baseR pixels, so 1 pixel = radius/baseR meters
-  var mToPx = baseR / radius;
-
-  // Draw base circle (planet outline)
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([]);
+  var atmoHeight = p.ATMOSPHERE_PHYSICS_DATA ? p.ATMOSPHERE_PHYSICS_DATA.height : 0;
+  if (atmoHeight > 0) drawCircle(radius + atmoHeight, 'rgba(88,88,88,0.75)', []);
+  var timewarpHeight = p.BASE_DATA.timewarpHeight || 0;
+  if (timewarpHeight > 0 && timewarpHeight !== atmoHeight) drawCircle(radius + timewarpHeight, 'rgba(88,88,88,0.75)', [5,4]);
   ctx.beginPath();
-  ctx.arc(cx, cy, baseR, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Draw terrain contour
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1.2;
-  ctx.setLineDash([]);
-  ctx.beginPath();
-  for (var i = 0; i <= N; i++){
-    var idx = i % N;
-    var angle = (idx / N) * Math.PI * 2 - Math.PI / 2; // start from top
-    var r = baseR + heights[idx] * maxTerrainPx;
-    var px = cx + Math.cos(angle) * r;
-    var py = cy + Math.sin(angle) * r;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
+  for (var j = 0; j <= count; j++){
+    var idx = j % count, theta = idx * 2 * Math.PI / count, radial = Math.max(0, radius + elevations[idx]), pt = toCanvas(radial * Math.cos(theta), radial * Math.sin(theta));
+    if (j === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
   }
   ctx.closePath();
-  ctx.fillStyle = 'rgba(0,0,0,0.03)';
-  ctx.fill();
-  ctx.stroke();
-
-  // Dashed circle helper
-  function dashedCircle(r_px, color, label){
-    if (r_px < 2 || r_px > 300) return;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, r_px, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // Atmosphere height (red dashed)
-  if (atmoH > 0){
-    var atmoPx = baseR + atmoH * mToPx;
-    dashedCircle(atmoPx, 'rgba(200,50,50,0.7)', '大气');
-  }
-
-  // Time warp height (blue dashed)
-  if (twH > 0){
-    var twPx = baseR + twH * mToPx;
-    dashedCircle(twPx, 'rgba(50,80,200,0.7)', '时间加速');
-  }
-
-  // Water height (green dashed) - shown as ocean depth above surface
-  if (waterH > 0){
-    var waterPx = baseR + waterH * mToPx;
-    dashedCircle(waterPx, 'rgba(40,160,60,0.7)', '水体');
-  }
-
-  // Rings (yellow dashed arcs)
-  if (ringStart > 0 && ringEnd > ringStart){
-    ctx.strokeStyle = 'rgba(200,180,40,0.6)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    // Ring inner arc (draw as full ellipse squashed for perspective feel)
-    var ringStartPx = baseR + (ringStart - radius) * mToPx;
-    var ringEndPx = baseR + (ringEnd - radius) * mToPx;
-    // Draw arcs only in the "back" half to suggest rings
-    if (ringStartPx > 5){
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, ringStartPx, ringStartPx * 0.3, 0, Math.PI, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (ringEndPx > 5){
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, ringEndPx, ringEndPx * 0.3, 0, Math.PI, Math.PI * 2);
-      ctx.stroke();
-    }
-    // Front arcs
-    if (ringStartPx > 5){
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, ringStartPx, ringStartPx * 0.3, 0, 0, Math.PI);
-      ctx.stroke();
-    }
-    if (ringEndPx > 5){
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, ringEndPx, ringEndPx * 0.3, 0, 0, Math.PI);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }
-
-  // Legend (bottom-right)
-  ctx.font = '11px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.setLineDash([]);
-  var legendX = W - 120;
-  var legendY = H - 10;
-  var legendItems = [];
-  legendItems.push({ color: '#000', label: '行星轮廓', dash: false });
-  legendItems.push({ color: '#000', label: '地形变化', dash: false });
-  if (atmoH > 0) legendItems.push({ color: 'rgba(200,50,50,0.7)', label: '大气高度', dash: true });
-  if (twH > 0) legendItems.push({ color: 'rgba(50,80,200,0.7)', label: '时间加速高度', dash: true });
-  if (waterH > 0) legendItems.push({ color: 'rgba(40,160,60,0.7)', label: '水体高度', dash: true });
-  if (ringStart > 0 && ringEnd > ringStart) legendItems.push({ color: 'rgba(200,180,40,0.6)', label: '光环', dash: true });
-
-  for (var li = legendItems.length - 1; li >= 0; li--){
-    var ly = legendY - li * 16;
-    ctx.strokeStyle = legendItems[li].color;
-    ctx.lineWidth = 1.5;
-    if (legendItems[li].dash) ctx.setLineDash([3, 3]);
-    else ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(legendX, ly - 4);
-    ctx.lineTo(legendX + 16, ly - 4);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#111';
-    ctx.fillText(legendItems[li].label, legendX + 20, ly);
+  var mc = p.BASE_DATA.mapColor || {r:0.5,g:0.5,b:0.5,a:1};
+  ctx.fillStyle = 'rgba('+Math.round((mc.r || 0)*255)+','+Math.round((mc.g || 0)*255)+','+Math.round((mc.b || 0)*255)+',0.4)'; ctx.fill();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = '#555'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('0°', W - 34, origin.y - 5); ctx.fillText('90°', origin.x + 5, 18); ctx.fillText('R ' + fmtNum(radius) + 'm', 13, H - 13);
+  var status = document.getElementById('terrainPreviewStatus');
+  if (status) {
+    var missingNames = Array.from(new Set(missing));
+    var builtinMissing = missingNames.filter(isBuiltinHeightmap);
+    var customMissing = missingNames.filter(function(name){ return !isBuiltinHeightmap(name); });
+    if (!missingNames.length) status.textContent = '已按 ZIP terrain_preview.py：径向采样、AddHeightMap 线性插值、Add 常量高度、大气/时间加速/光环标记。';
+    else if (state.heightmapLoadState === 'loading' && builtinMissing.length) status.textContent = '正在加载游戏内置高度图：' + builtinMissing.join('、') + '。';
+    else if (builtinMissing.length && !customMissing.length) status.textContent = '游戏内置高度图未加载：' + builtinMissing.join('、') + '。请确认 heightmap_default.json 与 index.html 位于同一目录；未使用伪随机替代。';
+    else status.textContent = '未绘制缺失自定义高度图：' + customMissing.concat(builtinMissing).join('、') + '。未使用伪随机替代。';
   }
 }
 
@@ -1929,10 +1967,18 @@ function deletePlanet(id){
    IMPORT / EXPORT
 ============================================================ */
 function cleanPlanetForExport(p){
+  if (p._sourceData){
+    const source = JSON.parse(JSON.stringify(p._sourceData));
+    const baseline = p._editorBaseline || {};
+    projectEditorValuesToSource(source, p, baseline);
+    return source;
+  }
   const clone = JSON.parse(JSON.stringify(p));
   delete clone._id;
   delete clone._type;
-  // remove null sections recursively
+  delete clone._sourceData;
+  delete clone._editorBaseline;
+  delete clone._sourceFileName;
   (function rm(o){
     if (Array.isArray(o)){ o.forEach(rm); return; }
     if (o && typeof o === 'object'){
@@ -1944,9 +1990,51 @@ function cleanPlanetForExport(p){
   })(clone);
   return clone;
 }
-function ensurePlanetShape(p){
+function isPlainObject(value){ return value && typeof value === 'object' && !Array.isArray(value); }
+function jsonEquals(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+function projectEditorValuesToSource(source, editor, baseline){
+  Object.keys(source).forEach(function(key){
+    if (!Object.hasOwn(editor, key)) return;
+    if (isPlainObject(source[key]) && isPlainObject(editor[key])) projectEditorValuesToSource(source[key], editor[key], baseline ? baseline[key] : undefined);
+    else source[key] = JSON.parse(JSON.stringify(editor[key]));
+  });
+  Object.keys(editor).forEach(function(key){
+    if (key.charAt(0) === '_' || key === 'name' || Object.hasOwn(source, key)) return;
+    var before = baseline ? baseline[key] : undefined;
+    if (!jsonEquals(editor[key], before)) source[key] = JSON.parse(JSON.stringify(editor[key]));
+  });
+}
+function exportPlanetFileName(p){ return safeZipFileName(p._sourceFileName || p.name, 'Body'); }
+function removeJsonTrailingCommas(text){
+  var output = '', inString = false, escaped = false;
+  for (var i = 0; i < text.length; i++){
+    var character = text[i];
+    if (inString){
+      output += character;
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"'){ inString = true; output += character; continue; }
+    if (character === ','){
+      var next = i + 1;
+      while (next < text.length && /\s/.test(text[next])) next++;
+      if (text[next] === '}' || text[next] === ']') continue;
+    }
+    output += character;
+  }
+  return output;
+}
+function parsePlanetSource(text){ return JSON.parse(removeJsonTrailingCommas(String(text))); }
+function ensurePlanetShape(p, sourceFileName){
   const skel = buildSkeleton(p.name || 'Imported', p.ORBIT_DATA && p.ORBIT_DATA.parent);
   const merged = deepMerge(skel, p);
+  const inferredName = String(sourceFileName || p.name || 'Imported').replace(/\.(txt|json)$/i, '');
+  merged.name = p.name || inferredName;
+  merged._sourceData = JSON.parse(JSON.stringify(p));
+  merged._sourceFileName = inferredName;
+  merged._editorBaseline = JSON.parse(JSON.stringify(merged));
   merged._id = uid();
   merged._type = (merged.ORBIT_DATA && !merged.ORBIT_DATA.parent) ? 'Center' : 'Planet';
   return merged;
@@ -1955,7 +2043,7 @@ function importFromText(){
   try {
     const text = document.getElementById('importText').value.trim();
     if (!text){ showToast('内容为空', 'error'); return; }
-    const data = JSON.parse(text);
+    const data = parsePlanetSource(text);
     const planet = ensurePlanetShape(data);
     state.planets.push(planet);
     state.activeId = planet._id;
@@ -1978,10 +2066,10 @@ function importPackFiles(event){
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const data = JSON.parse(ev.target.result);
+        const data = parsePlanetSource(ev.target.result);
         const arr = Array.isArray(data) ? data : [data];
         arr.forEach(d => {
-          const planet = ensurePlanetShape(d);
+          const planet = ensurePlanetShape(d, file.name);
           state.planets.push(planet);
           ok++;
         });
@@ -2021,7 +2109,7 @@ function openProject(event){
   const reader = new FileReader();
   reader.onload = ev => {
     try {
-      const data = JSON.parse(ev.target.result);
+      const data = parsePlanetSource(ev.target.result);
       if (!data.planets) throw new Error('无效的项目文件');
       state.planets = data.planets.map(p => {
         if (!p._id) p._id = uid();
@@ -2060,45 +2148,104 @@ function loadJSZip(){
     document.head.appendChild(script);
   });
 }
+function textureKey(name){ return String(name || '').trim().replace(/\.[^/.]+$/, ''); }
+function safeZipFileName(name, fallback){
+  var clean = String(name || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim();
+  return clean || fallback;
+}
+function getNestedString(data, path){
+  var value = data;
+  for (var i = 0; i < path.length; i++){
+    if (!value || typeof value !== 'object') return '';
+    value = value[path[i]];
+  }
+  return typeof value === 'string' ? value.trim() : '';
+}
+function collectReferencedTextures(){
+  var references = new Map();
+  state.planets.forEach(function(planet){
+    TEXTURE_FIELDS.forEach(function(path){
+      var value = getNestedString(planet, path);
+      if (!value || value === 'None') return;
+      var key = textureKey(value);
+      if (!references.has(key)) references.set(key, { name:value, uses:[] });
+      references.get(key).uses.push(planet.name + ' / ' + path.join('.'));
+    });
+  });
+  return references;
+}
+function requestResult(request){
+  return new Promise(function(resolve, reject){ request.onsuccess = function(){ resolve(request.result); }; request.onerror = function(){ reject(request.error); }; });
+}
+async function getCachedTextures(){
+  if (!_db) await openAssetDB();
+  var tx = _db.transaction('textures', 'readonly');
+  var records = await requestResult(tx.objectStore('textures').getAll());
+  return new Map(records.map(function(record){ return [textureKey(record.textureName || record.name), record]; }));
+}
+async function importTextureFiles(event){
+  var files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  if (!_db) await openAssetDB();
+  var tx = _db.transaction('textures', 'readwrite');
+  var accepted = 0, rejected = 0;
+  files.forEach(function(file){
+    var key = textureKey(file.name);
+    if (!key || !file.type.startsWith('image/')){ rejected++; return; }
+    tx.objectStore('textures').put({ name:key, textureName:key, fileName:safeZipFileName(file.name, key + '.png'), blob:file, type:file.type, created:Date.now() });
+    accepted++;
+  });
+  await new Promise(function(resolve, reject){ tx.oncomplete = resolve; tx.onerror = function(){ reject(tx.error); }; tx.onabort = function(){ reject(tx.error); }; });
+  event.target.value = '';
+  await countAssets();
+  showToast('已缓存贴图：'+accepted+(rejected ? '，跳过 '+rejected+' 个非图片文件' : ''), rejected ? 'error' : undefined);
+  if (document.getElementById('assetModal').classList.contains('active')) await showAssetManager();
+}
 function exportSinglePlanet(){
   const p = currentPlanet();
   if (!p){ showToast('未选中天体', 'error'); return; }
-  downloadFile(p.name + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
-  showToast('已导出: ' + p.name + '.txt');
+  const fileName = exportPlanetFileName(p);
+  downloadFile(fileName + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
+  showToast('已导出: ' + fileName + '.txt');
 }
 async function exportPlanetPack(){
   if (state.planets.length === 0){ showToast('没有天体可导出', 'error'); return; }
-  // 纹理存在性检查
-  const texNames = [];
-  state.planets.forEach(p => {
-    const td = p.TERRAIN_DATA && p.TERRAIN_DATA.TERRAIN_TEXTURE_DATA;
-    if (td){
-      if (td.planetTexture && td.planetTexture !== 'None') texNames.push(td.planetTexture);
-      if (td.surfaceTexture_A && td.surfaceTexture_A !== 'None') texNames.push(td.surfaceTexture_A);
-      if (td.surfaceTexture_B && td.surfaceTexture_B !== 'None') texNames.push(td.surfaceTexture_B);
-      if (td.terrainTexture_C && td.terrainTexture_C !== 'None') texNames.push(td.terrainTexture_C);
-    }
-    const av = p.ATMOSPHERE_VISUALS_DATA;
-    if (av){
-      if (av.GRADIENT && av.GRADIENT.texture && av.GRADIENT.texture !== 'None') texNames.push(av.GRADIENT.texture);
-      if (av.CLOUDS && av.CLOUDS.texture && av.CLOUDS.texture !== 'None') texNames.push(av.CLOUDS.texture);
-    }
-    const fc = p.FRONT_CLOUDS_DATA;
-    if (fc && fc.cloudsTexture && fc.cloudsTexture !== 'None') texNames.push(fc.cloudsTexture);
-    const r = p.RINGS_DATA;
-    if (r && r.ringsTexture && r.ringsTexture !== 'None') texNames.push(r.ringsTexture);
-    const w = p.WATER_DATA;
-    if (w && w.oceanMaskTexture && w.oceanMaskTexture !== 'None') texNames.push(w.oceanMaskTexture);
-  });
-  const uniqueTex = [...new Set(texNames)];
-  if (!confirm('以下纹理将被行星包引用（共 ' + uniqueTex.length + ' 个）：\n\n' + uniqueTex.join('\n') + '\n\n确认导出？')) return;
   try {
+    var pi = state.packInfo;
+    var references = collectReferencedTextures();
+    var cachedTextures = await getCachedTextures();
+    var texturesToWrite = [], missing = [];
+    references.forEach(function(reference, key){
+      var record = cachedTextures.get(key);
+      var defaultAvailable = pi.includeDefaultTextures && BUILTIN_TEXTURES.has(reference.name);
+      if (record) texturesToWrite.push(record);
+      else if (!defaultAvailable) missing.push(reference.name + '（'+reference.uses.join('；')+'）');
+    });
+    var heightmapNames = new Set();
+    state.planets.forEach(function(planet){
+      var lines = getNormalTerrainFormulaLines(planet.TERRAIN_DATA);
+      terrainFormulaOperations(lines).forEach(function(operation){ if (operation.type === 'AddHeightMap') heightmapNames.add(operation.name); });
+    });
+    var heightmapsToWrite = Object.entries(state.heightmaps || {}).filter(function(entry){
+      var name = entry[0], points = entry[1];
+      if (!Array.isArray(points) || points.length < 2) return false;
+      return pi.includeDefaultHeightmaps ? !isBuiltinHeightmap(name) : heightmapNames.has(name);
+    });
+    var builtinHeightmapsUsed = Array.from(heightmapNames).filter(isBuiltinHeightmap);
+    var unavailableHeightmaps = Array.from(heightmapNames).filter(function(name){ return !state.heightmaps[name] && !(pi.includeDefaultHeightmaps && isBuiltinHeightmap(name)); });
+    var messages = ['引用贴图：'+references.size+' 个', '将写入 Texture Data：'+texturesToWrite.length+' 个', '将写入 Heightmap Data：'+heightmapsToWrite.length+' 个'];
+    if (pi.includeDefaultHeightmaps && builtinHeightmapsUsed.length) messages.push('使用游戏内置高度图：'+builtinHeightmapsUsed.join('、'));
+    if (!pi.includeDefaultHeightmaps && builtinHeightmapsUsed.length) messages.push('将内置高度图副本写入包内：'+builtinHeightmapsUsed.join('、'));
+    if (unavailableHeightmaps.length) messages.push('缺失自定义高度图：'+unavailableHeightmaps.join('、'));
+    if (missing.length) messages.push('缺失贴图：\n'+missing.join('\n'));
+    if (!pi.includeDefaultHeightmaps && builtinHeightmapsUsed.length) messages.push('未加载游戏默认高度图；已随包写入内置副本。');
+    messages.push('确认导出？');
+    if (!confirm(messages.join('\n\n'))) return;
     const JSZip = await loadJSZip();
     const zip = new JSZip();
-    const pi = state.packInfo;
 
     state.planets.forEach(p => {
-      zip.file('Planet Data/' + p.name + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
+      zip.file('Planet Data/' + exportPlanetFileName(p) + '.txt', JSON.stringify(cleanPlanetForExport(p), null, 2));
     });
     zip.file('Import_Settings.txt', JSON.stringify({
       includeDefaultPlanets: pi.includeDefaultPlanets,
@@ -2113,6 +2260,14 @@ async function exportPlanetPack(){
     zip.file('Version.txt', '1.6.00.18');
     zip.folder('Heightmap Data');
     zip.folder('Texture Data');
+    heightmapsToWrite.forEach(function(entry){
+      var name = safeZipFileName(entry[0], 'Heightmap');
+      var source = state.heightmapSources[entry[0]];
+      zip.file('Heightmap Data/' + name + '.txt', typeof source === 'string' ? source : JSON.stringify({ points: entry[1] }, null, 2));
+    });
+    texturesToWrite.forEach(function(record){
+      zip.file('Texture Data/' + safeZipFileName(record.fileName || record.name, record.name + '.png'), record.blob);
+    });
 
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
@@ -2122,7 +2277,7 @@ async function exportPlanetPack(){
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast('已导出: ' + (pi.name || 'MyPlanetPack') + '.zip');
+    showToast('已导出: ' + (pi.name || 'MyPlanetPack') + '.zip（'+heightmapsToWrite.length+' 个高度图，'+texturesToWrite.length+' 个自定义贴图）');
   } catch (e) {
     showToast('导出失败: ' + e.message, 'error');
   }
@@ -2360,9 +2515,12 @@ function updateAssetInfo(){
   if (el) el.textContent = 'Assets: ' + state.assetCache.textures + ' textures, ' + state.assetCache.presets + ' presets';
 }
 
-function showAssetManager(){
+async function showAssetManager(){
+  var textures = await getCachedTextures();
   const stats = document.getElementById('assetStats');
-  stats.innerHTML = '<p>已缓存纹理: <strong>' + state.assetCache.textures + '</strong></p><p>已缓存预设: <strong>' + state.assetCache.presets + '</strong></p>';
+  stats.innerHTML = '<p>已缓存纹理: <strong>' + state.assetCache.textures + '</strong></p><p>已缓存预设: <strong>' + state.assetCache.presets + '</strong></p><p style="color:var(--text-muted);font-size:0.82rem;">导出时仅将这里已缓存且被天体字段引用的自定义贴图写入 <code>Texture Data</code>。</p>';
+  var list = document.getElementById('assetTextureList');
+  list.innerHTML = textures.size ? Array.from(textures.values()).map(function(texture){ return '<div style="padding:4px 0;border-bottom:1px solid var(--border);">'+esc(texture.textureName || texture.name)+' <span style="color:var(--text-muted)">→ '+esc(texture.fileName || texture.name)+'</span></div>'; }).join('') : '<span style="color:var(--text-muted)">尚无已缓存贴图。</span>';
   document.getElementById('assetModal').classList.add('active');
 }
 
@@ -2382,12 +2540,12 @@ async function saveTextureToCache(){
   const canvas = document.getElementById('texCanvas');
   if (!canvas) return;
   const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-  const name = 'texture_' + Date.now() + '.png';
+  const textureName = 'texture_' + Date.now();
   if (!_db) await openAssetDB();
   const tx = _db.transaction('textures', 'readwrite');
-  await tx.objectStore('textures').put({ name, blob, created: Date.now() });
+  await requestResult(tx.objectStore('textures').put({ name:textureName, textureName, fileName:textureName + '.png', blob, type:'image/png', created: Date.now() }));
   await countAssets();
-  showToast('纹理已保存到缓存: ' + name);
+  showToast('纹理已保存到缓存: ' + textureName + '（在纹理字段填写此名称即可导出）');
 }
 
 /* ============================================================
@@ -2743,6 +2901,33 @@ function init(){
   renderTree();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
+  fetch('heightmap_default.json', { cache:'no-store' }).then(function(response){
+    if (!response.ok) throw new Error('HEIGHTMAP_DATA 加载失败');
+    return response.json();
+  }).then(function(heightmapSources){
+    state.heightmaps = {};
+    state.heightmapSources = {};
+    state.builtinHeightmapNames = new Set(['Perlin']);
+    Object.entries(heightmapSources || {}).forEach(function(entry){
+      var name = entry[0], source = entry[1];
+      try {
+        if (typeof source === 'string') {
+          var parsed = JSON.parse(source);
+          if (Array.isArray(parsed.points) && parsed.points.length >= 2) {
+            state.heightmaps[name] = parsed.points;
+            state.heightmapSources[name] = source;
+            state.builtinHeightmapNames.add(name);
+          }
+        } else if (Array.isArray(source) && source.length >= 2) {
+          state.heightmaps[name] = source;
+          state.builtinHeightmapNames.add(name);
+        }
+      } catch (_error) {}
+    });
+    state.heightmapLoadState = 'ready';
+    terrainSampleCache = { key:'', elevations:null, missing:[] };
+    drawTerrainPreview();
+  }).catch(function(){ state.heightmaps = {}; state.heightmapSources = {}; state.heightmapLoadState = 'failed'; terrainSampleCache = { key:'', elevations:null, missing:[] }; drawTerrainPreview(); });
 }
 init();
 </script>
