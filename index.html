@@ -1389,10 +1389,10 @@ function typeLabel(p){
    TERRAIN PREVIEW (POLAR CONTOUR — matched to ZIP terrain_preview.py)
 ============================================================ */
 var terrainView = { bodyId:null, xMin:null, xMax:null, yMin:null, yMax:null, dragging:false, start:null, startView:null, frame:0 };
-var terrainSampleCache = { key:'', elevations:null, missing:[] };
+var terrainSampleCache = { key:'', elevations:null, missing:[], unsupported:[] };
 function invalidateTerrainSamples(){
   state.heightmapRevision = (state.heightmapRevision || 0) + 1;
-  terrainSampleCache = { key:'', elevations:null, missing:[] };
+  terrainSampleCache = { key:'', elevations:null, missing:[], unsupported:[] };
 }
 
 function getNormalTerrainFormulaLines(terrainData){
@@ -1413,43 +1413,86 @@ function terrainFormulaOperations(lines){
   var operations = [];
   (lines || []).forEach(function(raw){
     var line = String(raw || '').trim();
-    var heightmap = line.match(/^OUTPUT\s*=\s*AddHeightMap\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)$/i);
-    if (heightmap){
-      var lengthM = parseFloat(heightmap[2]), heightM = parseFloat(heightmap[3]);
-      if (Number.isFinite(lengthM) && Number.isFinite(heightM)) operations.push({ type:'AddHeightMap', name:heightmap[1].trim(), lengthM:lengthM, heightM:heightM });
+    if (!line || /^\/\//.test(line)) return;
+    var call = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z]+)\s*\((.*)\)\s*$/);
+    if (!call){ operations.push({ type:'unsupported', source:line, reason:'无法解析公式语句' }); return; }
+    var target = call[1], type = call[2], args = call[3].trim() ? call[3].split(',').map(function(part){ return part.trim(); }) : [];
+    if (type === 'AddHeightMap'){
+      var lengthM = Number(args[1]), heightM = Number(args[2]);
+      if (!args[0] || !Number.isFinite(lengthM) || !Number.isFinite(heightM)) operations.push({ type:'unsupported', source:line, reason:'AddHeightMap 参数无效' });
+      else operations.push({ type:type, target:target, name:args[0], lengthM:lengthM, heightM:heightM, curveName:(args[3] && args[3] !== 'null') ? args[3] : null, multiplierName:args[4] || null });
       return;
     }
-    var additive = line.match(/^OUTPUT\s*=\s*Add\(\s*([^)]+?)\s*\)$/i);
-    if (additive){
-      var value = parseFloat(additive[1]);
-      if (Number.isFinite(value)) operations.push({ type:'Add', heightM:value });
+    if (type === 'Add' || type === 'Multiply'){
+      var value = Number(args[0]);
+      if (Number.isFinite(value)) operations.push({ type:type, target:target, value:value });
+      else operations.push({ type:'unsupported', source:line, reason:type+' 参数无效' });
+      return;
     }
+    if (type === 'ClampMinMax'){
+      var minimum = Number(args[0]), maximum = Number(args[1]);
+      if (Number.isFinite(minimum) && Number.isFinite(maximum)) operations.push({ type:type, target:target, minimum:minimum, maximum:maximum });
+      else operations.push({ type:'unsupported', source:line, reason:'ClampMinMax 参数无效' });
+      return;
+    }
+    if (type === 'ApplyCurve' && args[0]) { operations.push({ type:type, target:target, curveName:args[0] }); return; }
+    operations.push({ type:'unsupported', source:line, reason:'未支持的 '+type+' 命令' });
   });
   return operations;
+}
+
+function sampleHeightmap(points, value, clamped){
+  if (!Array.isArray(points) || points.length < 2 || !Number.isFinite(value)) return 0;
+  if (clamped){
+    if (value <= 0) return points[0];
+    if (value >= 1) return points[points.length - 1];
+  } else value = ((value % 1) + 1) % 1;
+  var index = value * (points.length - 1), left = Math.floor(index), right = Math.min(left + 1, points.length - 1), fraction = index - left;
+  return points[left] * (1 - fraction) + points[right] * fraction;
 }
 
 function getTerrainSamples(planet, count, formulas){
   var key = [planet._id, count, JSON.stringify(formulas || []), state.heightmapRevision || 0].join('|');
   if (terrainSampleCache.key === key && terrainSampleCache.elevations) return terrainSampleCache;
-  var operations = terrainFormulaOperations(formulas), missing = [], elevations = new Array(count).fill(0);
+  var operations = terrainFormulaOperations(formulas), missing = [], unsupported = [], variables = {};
+  function buffer(name){ if (!variables[name]) variables[name] = new Array(count).fill(0); return variables[name]; }
   operations.forEach(function(operation){
+    if (operation.type === 'unsupported'){ unsupported.push(operation.reason + '：' + operation.source); return; }
+    var elevations = buffer(operation.target || 'OUTPUT');
     if (operation.type === 'Add'){
-      for (var a = 0; a < count; a++) elevations[a] += operation.heightM;
+      for (var a = 0; a < count; a++) elevations[a] += operation.value;
+      return;
+    }
+    if (operation.type === 'Multiply'){
+      for (var b = 0; b < count; b++) elevations[b] *= operation.value;
+      return;
+    }
+    if (operation.type === 'ClampMinMax'){
+      for (var c = 0; c < count; c++) elevations[c] = Math.max(operation.minimum, Math.min(operation.maximum, elevations[c]));
+      return;
+    }
+    if (operation.type === 'ApplyCurve'){
+      var curveOnly = state.heightmaps[operation.curveName];
+      if (!Array.isArray(curveOnly) || curveOnly.length < 2){ missing.push(operation.curveName); return; }
+      for (var d = 0; d < count; d++) elevations[d] = sampleHeightmap(curveOnly, elevations[d], true);
       return;
     }
     var points = state.heightmaps[operation.name];
     if (!Array.isArray(points) || points.length < 2){ missing.push(operation.name); return; }
+    var curve = operation.curveName ? state.heightmaps[operation.curveName] : null;
+    if (operation.curveName && (!Array.isArray(curve) || curve.length < 2)){ missing.push(operation.curveName); return; }
+    var multiplier = operation.multiplierName ? buffer(operation.multiplierName) : null;
     var period = operation.lengthM / Math.max(1, planet.BASE_DATA.radius || 1);
     if (!Number.isFinite(period) || period <= 0) return;
     for (var i = 0; i < count; i++){
       var degree = i * 360 / count;
       var phase = ((-degree * Math.PI / 180) % period + period) % period;
-      var index = phase / period * (points.length - 1);
-      var left = Math.floor(index), right = Math.min(left + 1, points.length - 1), fraction = index - left;
-      elevations[i] += (points[left] * (1 - fraction) + points[right] * fraction) * operation.heightM;
+      var heightValue = sampleHeightmap(points, phase / period, false);
+      if (curve) heightValue = sampleHeightmap(curve, heightValue, false);
+      elevations[i] += heightValue * operation.heightM * (multiplier ? multiplier[i] : 1);
     }
   });
-  terrainSampleCache = { key:key, elevations:elevations, missing:missing };
+  terrainSampleCache = { key:key, elevations:buffer('OUTPUT'), missing:missing, unsupported:unsupported };
   return terrainSampleCache;
 }
 function isBuiltinHeightmap(name){ return state.builtinHeightmapNames.has(String(name || '')); }
@@ -1538,7 +1581,7 @@ function drawTerrainPreview(){
   var viewScale = Math.max(xRange, yRange) / (radius * 2);
   var count = Math.min(7200, Math.max(360, Math.floor(360 * viewScale)));
   var formulas = getNormalTerrainFormulaLines(p.TERRAIN_DATA);
-  var samples = getTerrainSamples(p, count, formulas), missing = samples.missing, elevations = samples.elevations;
+  var samples = getTerrainSamples(p, count, formulas), missing = samples.missing, unsupported = samples.unsupported || [], elevations = samples.elevations;
 
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
   var origin = toCanvas(0, 0);
@@ -1577,7 +1620,8 @@ function drawTerrainPreview(){
     var missingNames = Array.from(new Set(missing));
     var builtinMissing = missingNames.filter(isBuiltinHeightmap);
     var customMissing = missingNames.filter(function(name){ return !isBuiltinHeightmap(name); });
-    if (!missingNames.length) status.textContent = '已按 ZIP terrain_preview.py：径向采样、AddHeightMap 线性插值、Add 常量高度、大气/时间加速/光环标记。';
+    if (unsupported.length) status.textContent = '存在未执行的真实地形公式：' + unsupported.join('；') + '。未使用伪随机替代。';
+    else if (!missingNames.length) status.textContent = '已按 PCSFS 公式执行器：AddHeightMap、曲线、变量、Add/Multiply/ClampMinMax 与径向采样。';
     else if (state.heightmapLoadState === 'loading' && builtinMissing.length) status.textContent = '正在加载游戏内置高度图：' + builtinMissing.join('、') + '。';
     else if (builtinMissing.length && !customMissing.length) status.textContent = '游戏内置高度图未加载：' + builtinMissing.join('、') + '。请确认 heightmap_default.json 与 index.html 位于同一目录；未使用伪随机替代。';
     else status.textContent = '未绘制缺失自定义高度图：' + customMissing.concat(builtinMissing).join('、') + '。未使用伪随机替代。';
@@ -1701,8 +1745,8 @@ function renderOrbitViewTab(p){
       '<button class="btn btn-sm'+(isChildren?' btn-primary':'')+'" onclick="setOrbitViewMode(\'children\')">子天体视图</button>' +
       '<button class="btn btn-sm'+(!isChildren?' btn-primary':'')+'" onclick="setOrbitViewMode(\'parent\')">父级视图</button>' +
     '</div>' +
-    '<div style="position:relative;width:100%;height:420px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fafafa;">' +
-      '<canvas id="orbitCanvas" width="800" height="420" style="width:100%;height:100%;display:block;cursor:grab;"></canvas>' +
+    '<div style="position:relative;width:100%;aspect-ratio:800 / 420;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fafafa;">' +
+      '<canvas id="orbitCanvas" width="800" height="420" style="width:100%;height:auto;aspect-ratio:800 / 420;display:block;cursor:grab;"></canvas>' +
       '<div style="position:absolute;top:6px;left:6px;font-size:0.78rem;color:#666;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;">' +
         (isChildren ? '当前: 子天体视图 · ' : '当前: 父级视图 · ') +
         '滚轮缩放 · 拖拽平移 · 双击选中行星' +
@@ -1714,8 +1758,12 @@ function renderOrbitViewTab(p){
     '</div>';
 }
 function setOrbitViewMode(m){
+  if (m !== 'children' && m !== 'parent') return;
   state._orbitViewMode = m;
-  resetOrbitView();
+  _orbitScale = 1; _orbitOffsetX = 0; _orbitOffsetY = 0;
+  renderActiveTab();
+  attachEventListeners();
+  setTimeout(function(){ initOrbitCanvas(); drawOrbitView(); }, 0);
 }
 
 function resetOrbitView(){
@@ -2663,6 +2711,8 @@ function initOrbitCanvas(){
   if (!canvas) return;
   _orbitCanvas = canvas;
   _orbitCtx = canvas.getContext('2d');
+  if (canvas.dataset.orbitBound === '1') return;
+  canvas.dataset.orbitBound = '1';
   function _cc(e){
     const rect = canvas.getBoundingClientRect();
     return { x: (e.offsetX / rect.width) * canvas.width, y: (e.offsetY / rect.height) * canvas.height };
@@ -2690,6 +2740,8 @@ function initOrbitCanvas(){
 }
 
 function drawOrbitView(){
+  return drawOrbitViewFixed();
+  /* 旧全局比例算法保留在此处仅作历史上下文；运行时使用下方按层级等比布局。 */
   const canvas = _orbitCanvas, ctx = _orbitCtx;
   if (!canvas || !ctx) return;
   const W = canvas.width, H = canvas.height;
@@ -2824,6 +2876,8 @@ function hoverOrbitPlanet(mx, my){
 }
 
 function _computeOrbitPositions(){
+  return buildOrbitLayout().positions;
+  /* 旧全局比例算法保留在此处仅作历史上下文；运行时使用下方按层级等比布局。 */
   const W = _orbitCanvas.width, H = _orbitCanvas.height;
   const cx = W / 2 + _orbitOffsetX, cy = H / 2 + _orbitOffsetY;
   const center = state.planets.find(p => p._type === 'Center');
@@ -2863,9 +2917,10 @@ function _computeOrbitPositions(){
 }
 
 function selectOrbitPlanet(mx, my){
-  const positions = _computeOrbitPositions();
-  for (const p of state.planets){
-    if (p._type === 'Center') continue;
+  const layout = buildOrbitLayout();
+  const positions = layout.positions;
+  for (const p of layout.visiblePlanets){
+    if (p._id === layout.root._id) continue;
     const pos = positions[p._id];
     if (!pos) continue;
     const pr = Math.max(2, Math.min(10, Math.log10(p.BASE_DATA.radius / 1000) * 1.5));
@@ -2877,6 +2932,116 @@ function selectOrbitPlanet(mx, my){
       return;
     }
   }
+}
+
+function getOrbitVisibleIds(){
+  const current = currentPlanet();
+  const visible = new Set();
+  if (!current) return visible;
+  const byName = new Map(state.planets.map(function(body){ return [body.name, body]; }));
+  const addDescendants = function(parent){
+    if (!parent) return;
+    visible.add(parent._id);
+    state.planets.forEach(function(body){
+      if (body.ORBIT_DATA && body.ORBIT_DATA.parent === parent.name) addDescendants(body);
+    });
+  };
+  if ((state._orbitViewMode || 'children') === 'children') {
+    addDescendants(current);
+    return visible;
+  }
+  var root = current;
+  var parent = current.ORBIT_DATA && byName.get(current.ORBIT_DATA.parent);
+  while (parent && parent !== root) {
+    root = parent;
+    parent = root.ORBIT_DATA && byName.get(root.ORBIT_DATA.parent);
+  }
+  addDescendants(root);
+  return visible;
+}
+
+function buildOrbitLayout(){
+  const canvas = _orbitCanvas;
+  const empty = { root:null, visibleIds:new Set(), visiblePlanets:[], positions:{}, orbits:{} };
+  if (!canvas || !state.planets.length) return empty;
+  const visibleIds = getOrbitVisibleIds();
+  const visiblePlanets = state.planets.filter(function(body){ return visibleIds.has(body._id); });
+  if (!visiblePlanets.length) return empty;
+  const byName = new Map(visiblePlanets.map(function(body){ return [body.name, body]; }));
+  let root = currentPlanet();
+  if (!root || !visibleIds.has(root._id)) root = visiblePlanets[0];
+  let parent = root.ORBIT_DATA && byName.get(root.ORBIT_DATA.parent);
+  while (parent && parent !== root) {
+    root = parent;
+    parent = root.ORBIT_DATA && byName.get(root.ORBIT_DATA.parent);
+  }
+  const W = canvas.width, H = canvas.height;
+  const positions = {}, orbits = {};
+  positions[root._id] = { x:W / 2 + _orbitOffsetX, y:H / 2 + _orbitOffsetY };
+  const phaseFor = function(body){
+    var id = String(body._id || body.name || '0'), total = 0;
+    for (var i = 0; i < id.length; i++) total = (total + id.charCodeAt(i) * (i + 1)) % 360;
+    return (state._orbitAnimPhase || 0) + total * Math.PI / 180;
+  };
+  const layoutChildren = function(parentBody, depth){
+    const children = visiblePlanets.filter(function(body){ return body.ORBIT_DATA && body.ORBIT_DATA.parent === parentBody.name; });
+    if (!children.length) return;
+    const maxSma = Math.max(1, ...children.map(function(body){ return Number(body.ORBIT_DATA.semiMajorAxis || body.ORBIT_DATA.orbitData || 1); }));
+    const radialBudget = Math.min(W, H) * (depth === 0 ? 0.34 : Math.max(0.12, 0.22 / (depth + 1))) * _orbitScale;
+    const pixelsPerMeter = radialBudget / maxSma;
+    children.forEach(function(body){
+      const od = body.ORBIT_DATA || {};
+      const sma = Number(od.semiMajorAxis || od.orbitData || 1);
+      const eccentricity = Math.max(0, Math.min(0.99, Number(od.eccentricity || 0)));
+      const angle = Number(od.argumentOfPeriapsis || 0) * Math.PI / 180;
+      const a = Math.max(2, sma * pixelsPerMeter);
+      const b = a * Math.sqrt(1 - eccentricity * eccentricity);
+      const phase = phaseFor(body), parentPosition = positions[parentBody._id];
+      const x = parentPosition.x + Math.cos(phase) * a * Math.cos(angle) - Math.sin(phase) * b * Math.sin(angle) - a * eccentricity * Math.cos(angle);
+      const y = parentPosition.y + Math.cos(phase) * a * Math.sin(angle) + Math.sin(phase) * b * Math.cos(angle) - a * eccentricity * Math.sin(angle);
+      positions[body._id] = { x:x, y:y };
+      orbits[body._id] = { parentId:parentBody._id, a:a, b:b, eccentricity:eccentricity, angle:angle };
+      layoutChildren(body, depth + 1);
+    });
+  };
+  layoutChildren(root, 0);
+  return { root:root, visibleIds:visibleIds, visiblePlanets:visiblePlanets, positions:positions, orbits:orbits };
+}
+
+function drawOrbitViewFixed(){
+  const canvas = _orbitCanvas, ctx = _orbitCtx;
+  if (!canvas || !ctx) return;
+  const layout = buildOrbitLayout();
+  if (!layout.root) return;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  Object.keys(layout.orbits).forEach(function(id){
+    const orbit = layout.orbits[id], parentPosition = layout.positions[orbit.parentId];
+    if (!parentPosition) return;
+    ctx.save();
+    ctx.translate(parentPosition.x, parentPosition.y);
+    ctx.rotate(orbit.angle);
+    ctx.beginPath();
+    ctx.ellipse(-orbit.a * orbit.eccentricity, 0, orbit.a, orbit.b, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(110,110,110,0.42)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  });
+  layout.visiblePlanets.forEach(function(body){
+    const position = layout.positions[body._id];
+    if (!position) return;
+    const color = body.BASE_DATA.mapColor || { r:0.55, g:0.55, b:0.55 };
+    const isRoot = body._id === layout.root._id;
+    const radius = isRoot ? Math.max(5, Math.min(13, Math.log10(Math.max(10, body.BASE_DATA.radius)) * 1.2)) : Math.max(3, Math.min(9, Math.log10(Math.max(10, body.BASE_DATA.radius)) * 1.15));
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgb(' + Math.round(color.r * 255) + ',' + Math.round(color.g * 255) + ',' + Math.round(color.b * 255) + ')';
+    ctx.fill();
+    if (isRoot) { ctx.strokeStyle = '#222'; ctx.lineWidth = 1.2; ctx.stroke(); }
+    ctx.fillStyle = '#333'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillText(body.name, position.x + radius + 4, position.y);
+  });
 }
 
 /* ============================================================
