@@ -154,7 +154,6 @@ header p{color:var(--text-muted);font-size:1rem;font-weight:400;letter-spacing:0
 .add-btn-wrap{margin-top:6px;}
 
 .preview-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;}
-#planetCanvas{background:transparent;border-radius:50%;max-width:100%;height:auto;}
 .preview-info{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:380px;}
 .preview-info-item{background:var(--surface-2);padding:8px;border-radius:var(--radius);text-align:center;border:1px solid var(--border);}
 .preview-info-label{font-size:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;}
@@ -385,8 +384,11 @@ const state = {
   assetCache: { textures: 0, presets: 0 },
   heightmaps: {},
   heightmapSources: {},
+  heightmapRevision: 0,
   builtinHeightmapNames: new Set(['Perlin']),
   heightmapLoadState: 'loading',
+  builtinPlanets: {},
+  builtinPlanetsLoadState: 'loading',
   _orbitViewMode: 'children'
 };
 
@@ -607,6 +609,20 @@ function buildPlanetFromTemplate(tpl, name, parentName){
     d.mapColor = { r:1, g:0.85, b:0.2, a:1 };
   }
   return p;
+}
+function buildPlanetFromCatalog(templateName, name, parentName){
+  var sourceText = state.builtinPlanets[templateName];
+  if (typeof sourceText === 'string') {
+    try {
+      var planet = ensurePlanetShape(parsePlanetSource(sourceText), name || templateName);
+      if (parentName !== undefined && planet.ORBIT_DATA) planet.ORBIT_DATA.parent = parentName || '';
+      planet.name = name || templateName;
+      planet._sourceFileName = name || templateName;
+      return planet;
+    } catch (_error) {}
+  }
+  var template = TEMPLATES.find(function(entry){ return entry.name === templateName; }) || TEMPLATES[3];
+  return buildPlanetFromTemplate(template, name, parentName);
 }
 
 /* ============================================================
@@ -962,7 +978,7 @@ function renderEditor(){
   renderMobTab();
   renderActiveTab();
   attachEventListeners();
-  setTimeout(function(){ drawPreview(); drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
+  setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
 }
 function renderTabs(){
   const el = document.getElementById('tabs');
@@ -980,8 +996,8 @@ function switchTab(id){
   if (sel) sel.value = id;
   renderActiveTab();
   attachEventListeners();
-  // Init right panel canvases (preview + orbit are always visible in right panel now)
-  setTimeout(()=>{ drawPreview(); drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
+  // 右侧保留真实地形与轨道预览；不再渲染通用行星缩略图
+  setTimeout(()=>{ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
   if (id === 'textures'){ setTimeout(regenTextureTab, 50); }
 }
 function renderActiveTab(){
@@ -991,13 +1007,15 @@ function renderActiveTab(){
   const rpContent = document.getElementById('rightPanelContent');
   if (!p){ el.innerHTML = ''; rpEl.style.display='none'; rpContent.innerHTML=''; return; }
 
-  // Right panel: always show preview + orbit view when a planet is selected
+  // 右侧仅显示星球数据、真实地形轮廓与轨道预览。
   rpEl.style.display = '';
   let rpHtml = '';
-  rpHtml += '<div class="section-title">行星预览</div>';
-  rpHtml += renderPreview(p);
-  rpHtml += '<div class="section-title" style="margin-top:16px;">轨道视图</div>';
+  rpHtml += '<div class="section-title">星球数据</div>';
+  rpHtml += renderPlanetDataSummary(p);
+  rpHtml += '<div class="section-title" style="margin-top:16px;">轨道预览</div>';
   rpHtml += renderOrbitViewTab(p);
+  rpHtml += '<div class="section-title" style="margin-top:16px;">地形数据</div>';
+  rpHtml += renderTerrainAndJsonPreview(p);
   rpContent.innerHTML = rpHtml;
 
   let html = '';
@@ -1330,8 +1348,10 @@ function renderAchievements(p){
 }
 
 function renderPreview(p){
+  return renderPlanetDataSummary(p) + renderTerrainAndJsonPreview(p);
+}
+function renderPlanetDataSummary(p){
   return '<div class="preview-wrap">' +
-    '<canvas id="planetCanvas" width="320" height="320"></canvas>' +
     '<div class="preview-info">' +
       infoItem('半径', fmtNum(p.BASE_DATA.radius)+'m') +
       infoItem('重力', p.BASE_DATA.gravity+' m/s²') +
@@ -1341,7 +1361,10 @@ function renderPreview(p){
       (p.ATMOSPHERE_PHYSICS_DATA ? infoItem('大气密度', String(p.ATMOSPHERE_PHYSICS_DATA.density)) : '') +
       (p.RINGS_DATA ? infoItem('光环', fmtNum(p.RINGS_DATA.startRadius)+'-'+fmtNum(p.RINGS_DATA.endRadius)+'m') : '') +
       (p.WATER_DATA ? infoItem('水体', '已启用') : '') +
-    '</div>' +
+    '</div></div>';
+}
+function renderTerrainAndJsonPreview(p){
+  return '<div class="preview-wrap">' +
     '<div style="width:100%;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;">'+
         '<div class="section-title" style="margin:0;border:0;padding:0;">地形预览 (极坐标轮廓)</div>'+
@@ -1367,6 +1390,10 @@ function typeLabel(p){
 ============================================================ */
 var terrainView = { bodyId:null, xMin:null, xMax:null, yMin:null, yMax:null, dragging:false, start:null, startView:null, frame:0 };
 var terrainSampleCache = { key:'', elevations:null, missing:[] };
+function invalidateTerrainSamples(){
+  state.heightmapRevision = (state.heightmapRevision || 0) + 1;
+  terrainSampleCache = { key:'', elevations:null, missing:[] };
+}
 
 function getNormalTerrainFormulaLines(terrainData){
   var difficulties = terrainData && terrainData.terrainFormulaDifficulties;
@@ -1402,7 +1429,7 @@ function terrainFormulaOperations(lines){
 }
 
 function getTerrainSamples(planet, count, formulas){
-  var key = [planet._id, count, JSON.stringify(formulas || []), Object.keys(state.heightmaps || {}).length].join('|');
+  var key = [planet._id, count, JSON.stringify(formulas || []), state.heightmapRevision || 0].join('|');
   if (terrainSampleCache.key === key && terrainSampleCache.elevations) return terrainSampleCache;
   var operations = terrainFormulaOperations(formulas), missing = [], elevations = new Array(count).fill(0);
   operations.forEach(function(operation){
@@ -1764,7 +1791,6 @@ function attachEventListeners(){
       }
       renderActiveTab();
       attachEventListeners();
-      drawPreview();
       drawTerrainPreview();
       drawOrbitView();
       updateJsonPreview();
@@ -1785,7 +1811,6 @@ function attachEventListeners(){
 
 function onPlanetChange(path){
   syncColorPickers();
-  drawPreview();
   drawTerrainPreview();
   drawOrbitView();
   updateJsonPreview();
@@ -1862,7 +1887,7 @@ function toggleRings(checked){
   const p = currentPlanet();
   if (checked) p.RINGS_DATA = makeRings(p.BASE_DATA.radius);
   else p.RINGS_DATA = null;
-  renderActiveTab(); attachEventListeners(); drawPreview(); updateJsonPreview();
+  renderActiveTab(); attachEventListeners(); drawTerrainPreview(); drawOrbitView(); updateJsonPreview();
 }
 
 /* ============================================================
@@ -1870,9 +1895,10 @@ function toggleRings(checked){
 ============================================================ */
 function newProject(){
   if (state.planets.length > 0 && !confirm('新建项目将清空当前所有天体，确定吗？')) return;
+  if (state.builtinPlanetsLoadState === 'loading') { showToast('正在加载真实内置星球数据，请稍后再试'); return; }
   state.planets = [];
   state.expanded = {};
-  const sun = buildPlanetFromTemplate(TEMPLATES[0], 'Sun', null);
+  const sun = buildPlanetFromCatalog('Sun', 'Sun', null);
   state.planets.push(sun);
   state.activeId = sun._id;
   state.activeTab = 'base';
@@ -1906,8 +1932,7 @@ function addBody(){
   if (state.planets.some(p => p.name === name)){
     showToast('已存在同名天体: ' + name, 'error'); return;
   }
-  const tpl = TEMPLATES.find(t => t.name === tplName) || TEMPLATES[3];
-  const planet = buildPlanetFromTemplate(tpl, name, parentName);
+  const planet = buildPlanetFromCatalog(tplName, name, parentName);
   state.planets.push(planet);
   state.activeId = planet._id;
   state.activeTab = 'base';
@@ -2901,6 +2926,13 @@ function init(){
   renderTree();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
+  fetch('builtin_planets.json', { cache:'no-store' }).then(function(response){
+    if (!response.ok) throw new Error('内置行星资源加载失败');
+    return response.json();
+  }).then(function(planets){
+    state.builtinPlanets = planets && typeof planets === 'object' ? planets : {};
+    state.builtinPlanetsLoadState = 'ready';
+  }).catch(function(){ state.builtinPlanets = {}; state.builtinPlanetsLoadState = 'failed'; });
   fetch('heightmap_default.json', { cache:'no-store' }).then(function(response){
     if (!response.ok) throw new Error('HEIGHTMAP_DATA 加载失败');
     return response.json();
@@ -2925,9 +2957,9 @@ function init(){
       } catch (_error) {}
     });
     state.heightmapLoadState = 'ready';
-    terrainSampleCache = { key:'', elevations:null, missing:[] };
+    invalidateTerrainSamples();
     drawTerrainPreview();
-  }).catch(function(){ state.heightmaps = {}; state.heightmapSources = {}; state.heightmapLoadState = 'failed'; terrainSampleCache = { key:'', elevations:null, missing:[] }; drawTerrainPreview(); });
+  }).catch(function(){ state.heightmaps = {}; state.heightmapSources = {}; state.heightmapLoadState = 'failed'; invalidateTerrainSamples(); drawTerrainPreview(); });
 }
 init();
 </script>
