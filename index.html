@@ -1017,6 +1017,7 @@ function renderActiveTab(){
   rpHtml += '<div class="section-title" style="margin-top:16px;">地形数据</div>';
   rpHtml += renderTerrainAndJsonPreview(p);
   rpContent.innerHTML = rpHtml;
+  updateJsonPreview();
 
   let html = '';
   switch(state.activeTab){
@@ -1740,6 +1741,8 @@ async function saveTextureTabToCache(){
 function renderOrbitViewTab(p){
   const mode = state._orbitViewMode || 'children';
   const isChildren = mode === 'children';
+  const visibleIds = getOrbitVisibleIds();
+  const bodies = state.planets.filter(function(body){ return visibleIds.has(body._id); });
   return section('轨道可视化') +
     '<div style="margin-bottom:10px;display:flex;gap:8px;">' +
       '<button class="btn btn-sm'+(isChildren?' btn-primary':'')+'" onclick="setOrbitViewMode(\'children\')">子天体视图</button>' +
@@ -1752,10 +1755,32 @@ function renderOrbitViewTab(p){
         '滚轮缩放 · 拖拽平移 · 双击选中行星' +
       '</div>' +
     '</div>' +
+    renderOrbitValuesTable(bodies, p) +
     '<div class="export-actions" style="margin-top:10px;">' +
       '<button class="btn" onclick="resetOrbitView()">重置视图</button>' +
       '<button class="btn" onclick="drawOrbitView()">刷新</button>' +
     '</div>';
+}
+function formatOrbitNumber(value){
+  var number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  return number.toLocaleString('zh-CN', { maximumFractionDigits:6 });
+}
+function renderOrbitValuesTable(bodies, selected){
+  if (!bodies.length) return '<div class="hint" style="margin-top:10px;">当前视图没有可显示的轨道数据。</div>';
+  var rows = bodies.map(function(body){
+    var orbit = body.ORBIT_DATA || {}, isSelected = body._id === selected._id;
+    var parent = orbit.parent || '—', semiMajor = orbit.semiMajorAxis || orbit.orbitData;
+    var stateLabel = isSelected ? '当前' : (orbit.parent ? '可见' : '根');
+    return '<tr'+(isSelected ? ' style="background:var(--surface-2);font-weight:600;"' : '')+'>'+
+      '<td>'+esc(body.name)+'</td><td>'+esc(parent)+'</td><td>'+formatOrbitNumber(semiMajor)+' m</td>'+
+      '<td>'+formatOrbitNumber(orbit.eccentricity || 0)+'</td><td>'+formatOrbitNumber(orbit.argumentOfPeriapsis || 0)+'°</td><td>'+stateLabel+'</td></tr>';
+  }).join('');
+  return '<div style="margin-top:10px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);">'+
+    '<table style="width:100%;border-collapse:collapse;font-size:0.78rem;min-width:600px;">'+
+      '<caption style="caption-side:top;text-align:left;padding:7px 8px;font-weight:600;color:var(--text);">当前视图的轨道数值</caption>'+
+      '<thead><tr style="background:var(--surface-2);color:var(--text-muted);"><th style="padding:6px;text-align:left;">天体</th><th style="padding:6px;text-align:left;">父级</th><th style="padding:6px;text-align:right;">半长轴</th><th style="padding:6px;text-align:right;">偏心率</th><th style="padding:6px;text-align:right;">近拱点角</th><th style="padding:6px;text-align:left;">状态</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div>';
 }
 function setOrbitViewMode(m){
   if (m !== 'children' && m !== 'parent') return;
