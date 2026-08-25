@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SFS 行星包生成器-已放弃维护</title>
+<title>SFS 行星包生成器</title>
 <style>
 :root{
   --bg:#fafafa; --surface:#fff; --surface-2:#f5f5f5; --surface-3:#efefef;
@@ -83,7 +83,7 @@ header p{color:var(--text-muted);font-size:1rem;font-weight:400;letter-spacing:0
 .right-panel .section-title{font-size:0.82rem;margin:12px 0 8px;}
 @media(max-width:639px){
   .main-grid{grid-template-columns:1fr !important;}
-  .right-panel{max-height:none;padding:10px;}
+  .right-panel{max-height:none;padding:10px;overflow:visible;}
   .right-panel canvas{width:100% !important;height:auto !important;}
 }
 @media(min-width:640px) and (max-width:959px){
@@ -183,12 +183,36 @@ header p{color:var(--text-muted);font-size:1rem;font-weight:400;letter-spacing:0
 .spacer{flex:1;}
 .hint{font-size:0.92rem;color:var(--text-muted);font-weight:300;}
 select{cursor:pointer;}
+@media(max-width:639px){
+  body{font-size:14px;overflow-x:hidden;}
+  .app{padding:4px;}
+  header{padding:10px 4px 8px;margin-bottom:7px;}
+  header h1{font-size:1.35rem;letter-spacing:0.04em;}
+  header .subtitle-divider{margin:8px 0;width:28px;}
+  header p{font-size:0.72rem;letter-spacing:0.06em;}
+  .toolbar{gap:6px;margin-bottom:9px;}
+  .toolbar .spacer{display:none;}
+  .toolbar .btn{flex:1 1 calc(50% - 4px);min-height:38px;padding:7px 8px;font-size:0.82rem;}
+  .sidebar{position:fixed;left:4px;top:4px;width:min(88vw,320px);max-height:calc(100vh - 8px);padding:12px;}
+  .content{min-height:0;}
+  .tab-content{padding:8px;}
+  .preview-wrap{gap:12px;}
+  .preview-info{max-width:none;gap:6px;}
+  .preview-info-item{padding:7px 4px;}
+  .preview-info-label{font-size:0.72rem;}
+  .preview-info-value{font-size:0.86rem;overflow-wrap:anywhere;}
+  .json-preview{max-height:260px;padding:9px;font-size:0.72rem;line-height:1.4;}
+  .section-title{font-size:0.82rem;margin:12px 0 7px;}
+  .modal{padding:14px;}
+  .modal-actions{flex-wrap:wrap;}
+  .toast{max-width:calc(100vw - 20px);text-align:center;font-size:0.86rem;padding:9px 12px;}
+}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>SFS 行星包生成器-已放弃维护</h1>
+    <h1>SFS 行星包生成器</h1>
     <div class="subtitle-divider"></div>
     <p>Space Flight Simulator Planet Pack Editor</p>
   </header>
@@ -391,6 +415,44 @@ const state = {
   builtinPlanetsLoadState: 'loading',
   _orbitViewMode: 'children'
 };
+const AUTOSAVE_KEY = 'sfs-planet-pack-generator.autosave.v1';
+let _autosaveTimer = 0;
+
+function projectSnapshot(){
+  return {
+    type: 'sfs-planet-pack-project', appVersion: '1.0', savedAt: new Date().toISOString(),
+    packInfo: state.packInfo, spaceCenter: state.spaceCenter, planets: state.planets,
+    activeId: state.activeId, activeTab: state.activeTab, expanded: state.expanded,
+    orbitViewMode: state._orbitViewMode
+  };
+}
+function saveAutosave(){
+  _autosaveTimer = 0;
+  try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(projectSnapshot())); }
+  catch (_error) { /* 本机存储不可用或空间不足时不影响编辑和手动导出。 */ }
+}
+function scheduleAutosave(){
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(saveAutosave, 450);
+}
+function restoreAutosave(){
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null');
+    if (!snapshot || snapshot.type !== 'sfs-planet-pack-project' || !Array.isArray(snapshot.planets)) return false;
+    state.planets = snapshot.planets.map(function(planet){
+      if (!planet._id) planet._id = uid();
+      if (!planet._type) planet._type = (planet.ORBIT_DATA && !planet.ORBIT_DATA.parent) ? 'Center' : 'Planet';
+      return planet;
+    });
+    if (snapshot.packInfo) Object.assign(state.packInfo, snapshot.packInfo);
+    if (snapshot.spaceCenter) Object.assign(state.spaceCenter, snapshot.spaceCenter);
+    state.activeId = state.planets.some(function(planet){ return planet._id === snapshot.activeId; }) ? snapshot.activeId : (state.planets[0] && state.planets[0]._id) || null;
+    state.activeTab = TABS.some(function(tab){ return tab.id === snapshot.activeTab; }) ? snapshot.activeTab : 'base';
+    state.expanded = snapshot.expanded && typeof snapshot.expanded === 'object' ? snapshot.expanded : {};
+    state._orbitViewMode = snapshot.orbitViewMode === 'parent' ? 'parent' : 'children';
+    return true;
+  } catch (_error) { return false; }
+}
 
 let _idc = 0;
 function uid(){ return 'b' + (++_idc) + '_' + Math.random().toString(36).slice(2,7); }
@@ -979,6 +1041,7 @@ function renderEditor(){
   renderActiveTab();
   attachEventListeners();
   setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
+  scheduleAutosave();
 }
 function renderTabs(){
   const el = document.getElementById('tabs');
@@ -1621,11 +1684,11 @@ function drawTerrainPreview(){
     var missingNames = Array.from(new Set(missing));
     var builtinMissing = missingNames.filter(isBuiltinHeightmap);
     var customMissing = missingNames.filter(function(name){ return !isBuiltinHeightmap(name); });
-    if (unsupported.length) status.textContent = '存在未执行的真实地形公式：' + unsupported.join('；') + '。未使用伪随机替代。';
-    else if (!missingNames.length) status.textContent = '已按 PCSFS 公式执行器：AddHeightMap、曲线、变量、Add/Multiply/ClampMinMax 与径向采样。';
-    else if (state.heightmapLoadState === 'loading' && builtinMissing.length) status.textContent = '正在加载游戏内置高度图：' + builtinMissing.join('、') + '。';
-    else if (builtinMissing.length && !customMissing.length) status.textContent = '游戏内置高度图未加载：' + builtinMissing.join('、') + '。请确认 heightmap_default.json 与 index.html 位于同一目录；未使用伪随机替代。';
-    else status.textContent = '未绘制缺失自定义高度图：' + customMissing.concat(builtinMissing).join('、') + '。未使用伪随机替代。';
+    if (unsupported.length) { status.style.display = ''; status.textContent = '存在未执行的真实地形公式：' + unsupported.join('；') + '。未使用伪随机替代。'; }
+    else if (!missingNames.length) { status.textContent = ''; status.style.display = 'none'; }
+    else if (state.heightmapLoadState === 'loading' && builtinMissing.length) { status.style.display = ''; status.textContent = '正在加载游戏内置高度图：' + builtinMissing.join('、') + '。'; }
+    else if (builtinMissing.length && !customMissing.length) { status.style.display = ''; status.textContent = '游戏内置高度图未加载：' + builtinMissing.join('、') + '。请确认 heightmap_default.json 与 index.html 位于同一目录；未使用伪随机替代。'; }
+    else { status.style.display = ''; status.textContent = '未绘制缺失自定义高度图：' + customMissing.concat(builtinMissing).join('、') + '。未使用伪随机替代。'; }
   }
 }
 
@@ -1788,6 +1851,7 @@ function setOrbitViewMode(m){
   _orbitScale = 1; _orbitOffsetX = 0; _orbitOffsetY = 0;
   renderActiveTab();
   attachEventListeners();
+  scheduleAutosave();
   setTimeout(function(){ initOrbitCanvas(); drawOrbitView(); }, 0);
 }
 
@@ -1864,8 +1928,8 @@ function attachEventListeners(){
       }
       renderActiveTab();
       attachEventListeners();
-      drawTerrainPreview();
-      drawOrbitView();
+      scheduleTerrainPreviewDraw();
+      scheduleOrbitPreviewDraw();
       updateJsonPreview();
     });
   });
@@ -1884,9 +1948,10 @@ function attachEventListeners(){
 
 function onPlanetChange(path){
   syncColorPickers();
-  drawTerrainPreview();
-  drawOrbitView();
+  scheduleTerrainPreviewDraw();
+  scheduleOrbitPreviewDraw();
   updateJsonPreview();
+  scheduleAutosave();
   if (path === 'name' || path === 'ORBIT_DATA.parent') renderTree();
 }
 function syncColorPickers(){
@@ -2729,7 +2794,12 @@ function downloadTexture(){
 /* ============================================================
    ORBIT VISUALIZER
 ============================================================ */
-let _orbitCtx = null, _orbitCanvas = null, _orbitScale = 1, _orbitOffsetX = 0, _orbitOffsetY = 0, _orbitDragging = false, _orbitLastX = 0, _orbitLastY = 0;
+let _orbitCtx = null, _orbitCanvas = null, _orbitScale = 1, _orbitOffsetX = 0, _orbitOffsetY = 0, _orbitDragging = false, _orbitLastX = 0, _orbitLastY = 0, _orbitFrame = 0;
+
+function scheduleOrbitPreviewDraw(){
+  if (_orbitFrame) return;
+  _orbitFrame = requestAnimationFrame(function(){ _orbitFrame = 0; drawOrbitView(); });
+}
 
 function initOrbitCanvas(){
   const canvas = document.getElementById('orbitCanvas');
@@ -2751,12 +2821,12 @@ function initOrbitCanvas(){
     _orbitOffsetY = (my - H / 2) * (1 - factor) + factor * _orbitOffsetY;
     _orbitScale *= factor;
     _orbitScale = Math.max(0.05, Math.min(20, _orbitScale));
-    drawOrbitView();
+    scheduleOrbitPreviewDraw();
   });
   canvas.addEventListener('mousedown', e => { _orbitDragging = true; const {x,y} = _cc(e); _orbitLastX = x; _orbitLastY = y; });
   canvas.addEventListener('mousemove', e => {
     const {x,y} = _cc(e);
-    if (_orbitDragging){ _orbitOffsetX += x - _orbitLastX; _orbitOffsetY += y - _orbitLastY; _orbitLastX = x; _orbitLastY = y; drawOrbitView(); }
+    if (_orbitDragging){ _orbitOffsetX += x - _orbitLastX; _orbitOffsetY += y - _orbitLastY; _orbitLastX = x; _orbitLastY = y; scheduleOrbitPreviewDraw(); }
     else { hoverOrbitPlanet(x, y); }
   });
   canvas.addEventListener('mouseup', () => _orbitDragging = false);
@@ -3113,9 +3183,16 @@ function showTemplateImportModal(dataKey){
    INIT
 ============================================================ */
 function init(){
+  const restored = restoreAutosave();
   renderTree();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
+  if (state.activeId){
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('editorContent').style.display = 'block';
+    renderEditor();
+    if (restored) setTimeout(function(){ showToast('已恢复本机自动保存的项目'); }, 120);
+  }
   fetch('builtin_planets.json', { cache:'no-store' }).then(function(response){
     if (!response.ok) throw new Error('内置行星资源加载失败');
     return response.json();
