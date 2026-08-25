@@ -415,50 +415,11 @@ const state = {
   builtinPlanetsLoadState: 'loading',
   _orbitViewMode: 'children'
 };
-const AUTOSAVE_KEY = 'sfs-planet-pack-generator.autosave.v1';
-let _autosaveTimer = 0;
-
 window.addEventListener('beforeunload', function(event){
   if (!state.planets.length) return;
   event.preventDefault();
   event.returnValue = '';
 });
-
-function projectSnapshot(){
-  return {
-    type: 'sfs-planet-pack-project', appVersion: '1.0', savedAt: new Date().toISOString(),
-    packInfo: state.packInfo, spaceCenter: state.spaceCenter, planets: state.planets,
-    activeId: state.activeId, activeTab: state.activeTab, expanded: state.expanded,
-    orbitViewMode: state._orbitViewMode
-  };
-}
-function saveAutosave(){
-  _autosaveTimer = 0;
-  try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(projectSnapshot())); }
-  catch (_error) { /* 本机存储不可用或空间不足时不影响编辑和手动导出。 */ }
-}
-function scheduleAutosave(){
-  clearTimeout(_autosaveTimer);
-  _autosaveTimer = setTimeout(saveAutosave, 450);
-}
-function restoreAutosave(){
-  try {
-    const snapshot = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null');
-    if (!snapshot || snapshot.type !== 'sfs-planet-pack-project' || !Array.isArray(snapshot.planets)) return false;
-    state.planets = snapshot.planets.map(function(planet){
-      if (!planet._id) planet._id = uid();
-      if (!planet._type) planet._type = (planet.ORBIT_DATA && !planet.ORBIT_DATA.parent) ? 'Center' : 'Planet';
-      return planet;
-    });
-    if (snapshot.packInfo) Object.assign(state.packInfo, snapshot.packInfo);
-    if (snapshot.spaceCenter) Object.assign(state.spaceCenter, snapshot.spaceCenter);
-    state.activeId = state.planets.some(function(planet){ return planet._id === snapshot.activeId; }) ? snapshot.activeId : (state.planets[0] && state.planets[0]._id) || null;
-    state.activeTab = TABS.some(function(tab){ return tab.id === snapshot.activeTab; }) ? snapshot.activeTab : 'base';
-    state.expanded = snapshot.expanded && typeof snapshot.expanded === 'object' ? snapshot.expanded : {};
-    state._orbitViewMode = snapshot.orbitViewMode === 'parent' ? 'parent' : 'children';
-    return true;
-  } catch (_error) { return false; }
-}
 
 let _idc = 0;
 function uid(){ return 'b' + (++_idc) + '_' + Math.random().toString(36).slice(2,7); }
@@ -1061,7 +1022,6 @@ function renderEditor(){
   renderActiveTab();
   attachEventListeners();
   setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
-  scheduleAutosave();
 }
 function renderTabs(){
   const el = document.getElementById('tabs');
@@ -1732,7 +1692,7 @@ function renderExport(p){
         selField('spaceCenter.address','所在天体',sc.address,bodyOpts,'默认 Earth') +
         numField('spaceCenter.angle','角度',sc.angle,1,'') +
         numField('spaceCenter.position_LaunchPad.horizontalPosition','发射台水平位置',sc.position_LaunchPad.horizontalPosition,0.1,'') +
-        numField('spaceCenter.position_LaunchPad.height','发射台高度',sc.position_LaunchPad.height,0.1,'') +
+        numField('spaceCenter.position_LaunchPad.height','发射台高度',sc.position_LaunchPad.height,0.1,'相对天体基准半径的高度；导出时会自动不低于真实地形加 12m 安全净空。') +
       '</div>' +
     '</div>' +
     section('导出操作') +
@@ -1871,7 +1831,6 @@ function setOrbitViewMode(m){
   _orbitScale = 1; _orbitOffsetX = 0; _orbitOffsetY = 0;
   renderActiveTab();
   attachEventListeners();
-  scheduleAutosave();
   setTimeout(function(){ initOrbitCanvas(); drawOrbitView(); }, 0);
 }
 
@@ -1971,7 +1930,6 @@ function onPlanetChange(path){
   scheduleTerrainPreviewDraw();
   scheduleOrbitPreviewDraw();
   updateJsonPreview();
-  scheduleAutosave();
   if (path === 'name' || path === 'ORBIT_DATA.parent') renderTree();
 }
 function syncColorPickers(){
@@ -2064,7 +2022,6 @@ function newProject(){
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('editorContent').style.display = 'block';
   renderEditor();
-  scheduleAutosave();
   showToast('已创建新项目 (Sun 中心天体)');
 }
 function showAddBodyModal(){
@@ -2101,7 +2058,6 @@ function addBody(){
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('editorContent').style.display = 'block';
   renderEditor();
-  scheduleAutosave();
   showToast('已添加天体: ' + name);
 }
 function duplicatePlanet(id){
@@ -2116,7 +2072,6 @@ function duplicatePlanet(id){
   state.activeId = copy._id;
   renderTree();
   renderEditor();
-  scheduleAutosave();
   showToast('已复制: ' + n);
 }
 function deletePlanet(id){
@@ -2149,7 +2104,6 @@ function deletePlanet(id){
     renderEditor();
   }
   renderTree();
-  scheduleAutosave();
   showToast('已删除 '+count+' 个天体');
 }
 
@@ -2379,6 +2333,18 @@ function getExportPlanets(){
   if (missingParents.length) throw new Error('无法导出：缺少父级天体 ' + Array.from(new Set(missingParents)).join('、') + '。请先添加它们，或开启“包含默认行星”。');
   return { planets:planets, appended:appended };
 }
+function getLaunchPadTerrainHeight(planet, spaceCenter){
+  var formulas = getNormalTerrainFormulaLines(planet.TERRAIN_DATA);
+  if (!formulas.length) return { height:0, missing:[], unsupported:[] };
+  var count = 2048, samples = getTerrainSamples(planet, count, formulas);
+  var radius = Math.max(1, Number(planet.BASE_DATA && planet.BASE_DATA.radius) || 1);
+  var originAngle = Number(spaceCenter.angle) * Math.PI / 180;
+  var gameAngle = originAngle - Number(spaceCenter.position_LaunchPad.horizontalPosition || 0) / radius;
+  var previewAngle = ((gameAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  var position = previewAngle / (Math.PI * 2) * count;
+  var left = Math.floor(position) % count, right = (left + 1) % count, fraction = position - Math.floor(position);
+  return { height:samples.elevations[left] * (1 - fraction) + samples.elevations[right] * fraction, missing:samples.missing || [], unsupported:samples.unsupported || [] };
+}
 function getSpaceCenterForExport(planets){
   var names = new Set(planets.map(function(planet){ return planet.name; }));
   var address = String(state.spaceCenter.address || '').trim();
@@ -2389,7 +2355,15 @@ function getSpaceCenterForExport(planets){
   }
   var output = JSON.parse(JSON.stringify(state.spaceCenter));
   output.address = address;
-  return output;
+  var launchPlanet = planets.find(function(planet){ return planet.name === address; });
+  if (!launchPlanet && typeof state.builtinPlanets[address] === 'string') launchPlanet = buildPlanetFromCatalog(address, address, undefined);
+  if (!launchPlanet) throw new Error('无法校验航天中心地形：未找到 '+address+' 的真实星球数据。');
+  var terrain = getLaunchPadTerrainHeight(launchPlanet, output);
+  if (terrain.missing.length || terrain.unsupported.length) throw new Error('无法校验航天中心地形：'+terrain.missing.concat(terrain.unsupported).join('；'));
+  var requestedHeight = Number(output.position_LaunchPad.height) || 0;
+  var safeHeight = Math.max(requestedHeight, terrain.height + 12);
+  output.position_LaunchPad.height = safeHeight;
+  return { data:output, terrainHeight:terrain.height, requestedHeight:requestedHeight, safeHeight:safeHeight, corrected:safeHeight > requestedHeight + 0.001 };
 }
 function requestResult(request){
   return new Promise(function(resolve, reject){ request.onsuccess = function(){ resolve(request.result); }; request.onerror = function(){ reject(request.error); }; });
@@ -2430,7 +2404,7 @@ async function exportPlanetPack(){
   try {
     var pi = state.packInfo;
     var exportResolution = getExportPlanets(), exportPlanets = exportResolution.planets;
-    var spaceCenterForExport = getSpaceCenterForExport(exportPlanets);
+    var spaceCenterResult = getSpaceCenterForExport(exportPlanets), spaceCenterForExport = spaceCenterResult.data;
     var references = collectReferencedTextures(exportPlanets);
     var cachedTextures = await getCachedTextures();
     var texturesToWrite = [], missing = [];
@@ -2459,6 +2433,7 @@ async function exportPlanetPack(){
     if (missing.length) messages.push('缺失贴图：\n'+missing.join('\n'));
     if (!pi.includeDefaultHeightmaps && builtinHeightmapsUsed.length) messages.push('未加载游戏默认高度图；已随包写入内置副本。');
     if (exportResolution.appended.length) messages.push('为保持轨道与空间中心有效，已补全父级天体：'+exportResolution.appended.join('、'));
+    if (spaceCenterResult.corrected) messages.push('发射台高度已按 '+spaceCenterForExport.address+' 的地形由 '+spaceCenterResult.requestedHeight.toFixed(2)+'m 提升至 '+spaceCenterResult.safeHeight.toFixed(2)+'m（地形 '+spaceCenterResult.terrainHeight.toFixed(2)+'m + 12m 安全净空）。');
     messages.push('确认导出？');
     if (!confirm(messages.join('\n\n'))) return;
     const JSZip = await loadJSZip();
@@ -3240,16 +3215,10 @@ function showTemplateImportModal(dataKey){
    INIT
 ============================================================ */
 function init(){
-  const restored = restoreAutosave();
+  try { localStorage.removeItem('sfs-planet-pack-generator.autosave.v1'); } catch (_error) {}
   renderTree();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
-  if (state.activeId){
-    document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('editorContent').style.display = 'block';
-    renderEditor();
-    if (restored) setTimeout(function(){ showToast('已恢复本机自动保存的项目'); }, 120);
-  }
   fetch('builtin_planets.json', { cache:'no-store' }).then(function(response){
     if (!response.ok) throw new Error('内置行星资源加载失败');
     return response.json();
