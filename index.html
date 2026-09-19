@@ -172,7 +172,7 @@ header p{color:var(--text-muted);font-size:1rem;font-weight:400;letter-spacing:0
 .modal h2{font-size:1.1rem;font-weight:300;margin-bottom:14px;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
 
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 20px;border-radius:var(--radius);z-index:2000;opacity:0;transition:all .25s;font-size:1rem;box-shadow:0 4px 14px rgba(0,0,0,0.2);}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 20px;border-radius:var(--radius);z-index:2000;opacity:0;transition:all .25s;font-size:1rem;box-shadow:0 4px 14px rgba(0,0,0,0.2);pointer-events:none;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 .toast.error{background:#a33;}
 
@@ -207,6 +207,70 @@ select{cursor:pointer;}
   .modal-actions{flex-wrap:wrap;}
   .toast{max-width:calc(100vw - 20px);text-align:center;font-size:0.86rem;padding:9px 12px;}
 }
+
+/* ============================================================
+   布局溢出修复：栅格子项默认 min-width:auto，会被内部 600px 表格
+   等宽内容撑爆（手机 390px 视口下页面实际 628px 宽）。
+   min-width:0 后由内部的 overflow:auto 容器负责滚动。
+============================================================ */
+.main-grid > *{min-width:0;max-width:100%;}
+.content,.right-panel{max-width:100%;}
+
+/* 触屏设备没有 hover：天体树的操作按钮（+ = ×）常显 */
+@media(hover:none){
+  .tree-actions{opacity:1;}
+  .tree-row .tree-act{width:26px;height:26px;} /* 触屏点击目标放大一点 */
+}
+
+/* 交互画布：禁止浏览器接管触摸手势（页面滚动/双击缩放），由 JS 手势逻辑处理 */
+#terrainPreviewCanvas,#orbitCanvas{touch-action:none;}
+
+/* 工具栏「更多」下拉菜单（仅移动端按钮触发） */
+.toolbar{position:relative;}
+.more-menu{
+  position:absolute;top:calc(100% + 2px);right:0;display:none;flex-direction:column;gap:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:0 6px 24px rgba(0,0,0,0.14);padding:8px;z-index:400;min-width:160px;
+}
+.more-menu.open{display:flex;}
+.more-menu .btn{flex:0 0 auto;width:100%;text-align:left;}
+
+/* 桌面默认隐藏「更多」按钮 */
+.show-mob{display:none;}
+
+/* ============================================================
+   移动端底部导航：天体 / 编辑 / 预览 / 导出
+============================================================ */
+.mob-nav{
+  position:fixed;left:0;right:0;bottom:0;display:none;z-index:500;
+  background:var(--surface);border-top:1px solid var(--border);
+  padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px));
+  box-shadow:0 -1px 4px rgba(0,0,0,0.04);
+}
+.mob-nav-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:6px 0 4px;border:none;background:none;color:var(--text-muted);
+  font-size:0.66rem;cursor:pointer;font-family:inherit;letter-spacing:0.02em;
+}
+.mob-nav-item svg{width:20px;height:20px;display:block;}
+.mob-nav-item.active{color:var(--text);font-weight:600;}
+.mob-nav-item.active svg{stroke-width:2.4;}
+
+@media(max-width:639px){
+  /* 工具栏精简：低频动作收进「更多」菜单 */
+  .hide-mob{display:none !important;}
+  .show-mob{display:inline-flex !important;}
+  /* 导出视图：隐藏内层标签下拉，页面本身就是导出页 */
+  .content.mob-export-view .tab-mob{display:none;}
+  /* 天体视图：侧栏从抽屉变为静态面板 */
+  .sidebar.mob-static{position:static;transform:none;width:auto;max-height:none;box-shadow:none;z-index:auto;}
+  .sidebar-backdrop{display:none !important;}
+  body.has-mob-nav .mob-nav{display:flex;}
+  body.has-mob-nav .app{padding-bottom:calc(78px + env(safe-area-inset-bottom,0px));}
+  .toast{bottom:calc(88px + env(safe-area-inset-bottom,0px));}
+  /* 纹理创建弹窗：双栏改单栏 */
+  .tex-creator-grid{grid-template-columns:1fr !important;}
+}
 </style>
 </head>
 <body>
@@ -218,18 +282,26 @@ select{cursor:pointer;}
   </header>
 
   <div class="toolbar">
-    <button class="btn" onclick="toggleSidebar()" id="sidebarToggle" style="display:none">&#9776;</button>
     <button class="btn btn-primary" onclick="newProject()">新建项目</button>
-    <button class="btn" onclick="showAddBodyModal()">添加天体</button>
+    <button class="btn hide-mob" onclick="showAddBodyModal()">添加天体</button>
+    <button class="btn hide-mob" onclick="showTextureCreator()">纹理创建</button>
+    <button class="btn hide-mob" onclick="document.getElementById('textureFiles').click()">导入贴图</button>
+    <button class="btn hide-mob" onclick="showAssetManager()">资源管理</button>
     <div class="spacer"></div>
-    <span class="asset-info" id="assetInfo" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
-    <button class="btn" onclick="showTextureCreator()">纹理创建</button>
-    <button class="btn" onclick="document.getElementById('textureFiles').click()">导入贴图</button>
-    <button class="btn" onclick="showAssetManager()">资源管理</button>
+    <span class="asset-info hide-mob" id="assetInfo" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
     <button class="btn" onclick="saveProject()">保存项目</button>
     <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
-    <button class="btn" onclick="document.getElementById('packFiles').click()">导入行星包</button>
-    <button class="btn btn-primary" onclick="exportPlanetPack()">导出行星包</button>
+    <button class="btn hide-mob" onclick="document.getElementById('packFiles').click()">导入行星包</button>
+    <button class="btn btn-primary hide-mob" onclick="exportPlanetPack()">导出行星包</button>
+    <button class="btn show-mob" id="btnMore" onclick="toggleMoreMenu()">更多 ▾</button>
+    <div class="more-menu" id="moreMenu">
+      <button class="btn" onclick="runMore('addBody')">添加天体</button>
+      <button class="btn" onclick="runMore('texture')">纹理创建</button>
+      <button class="btn" onclick="runMore('importTextures')">导入贴图</button>
+      <button class="btn" onclick="runMore('assets')">资源管理</button>
+      <button class="btn" onclick="runMore('importPack')">导入行星包</button>
+      <button class="btn" onclick="runMore('exportPack')">导出行星包</button>
+    </div>
     <input type="file" id="projFile" accept=".sfsproj,.json" style="display:none" onchange="openProject(event)">
     <input type="file" id="packFiles" accept=".txt,.json" multiple style="display:none" onchange="importPackFiles(event)">
     <input type="file" id="textureFiles" accept="image/png,image/jpeg,image/webp,image/bmp,image/tga" multiple style="display:none" onchange="importTextureFiles(event)">
@@ -313,6 +385,26 @@ select{cursor:pointer;}
   </div>
 </div>
 
+<!-- Mobile bottom navigation -->
+<nav class="mob-nav" id="mobNav">
+  <button class="mob-nav-item" data-view="bodies" onclick="setMobileView('bodies')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/></svg>
+    <span>天体</span>
+  </button>
+  <button class="mob-nav-item" data-view="edit" onclick="setMobileView('edit')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="1.8" fill="var(--surface)"/><circle cx="15" cy="12" r="1.8" fill="var(--surface)"/><circle cx="7" cy="17" r="1.8" fill="var(--surface)"/></svg>
+    <span>编辑</span>
+  </button>
+  <button class="mob-nav-item" data-view="preview" onclick="setMobileView('preview')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></svg>
+    <span>预览</span>
+  </button>
+  <button class="mob-nav-item" data-view="export" onclick="setMobileView('export')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><polyline points="7 10 12 15 17 10"/><path d="M4 19h16"/></svg>
+    <span>导出</span>
+  </button>
+</nav>
+
 <div class="toast" id="toast"></div>
 
 <!-- Asset Manager Modal -->
@@ -333,7 +425,7 @@ select{cursor:pointer;}
 <div class="modal-overlay" id="textureModal">
   <div class="modal" style="max-width:700px;">
     <h2>纹理创建工具</h2>
-    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-bottom:14px;">
+    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-bottom:14px;" class="tex-creator-grid">
       <div>
         <div class="form-group">
           <label>纹理类型</label>
@@ -1015,12 +1107,14 @@ function selectPlanet(id){
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('editorContent').style.display = 'block';
   renderEditor();
+  if (isMobileLayout()) setMobileView('edit');
 }
 function renderEditor(){
   renderTabs();
   renderMobTab();
   renderActiveTab();
   attachEventListeners();
+  applyMobileView();
   setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 50);
 }
 function renderTabs(){
@@ -1607,6 +1701,62 @@ function bindTerrainPreviewCanvas(canvas){
     scheduleTerrainPreviewDraw();
   });
   ['mouseup','mouseleave'].forEach(function(type){ canvas.addEventListener(type, function(){ terrainView.dragging = false; }); });
+  /* ---- 触屏：单指拖动平移，双指捏合缩放（以起始中点为锚） ---- */
+  var _tp = { pinching:false, dist:0, midX:0, midY:0, startView:null };
+  canvas.addEventListener('touchstart', function(event){
+    event.preventDefault();
+    if (event.touches.length === 1){
+      terrainView.dragging = true;
+      terrainView.start = toWorld(event.touches[0]);
+      terrainView.startView = { xMin:terrainView.xMin, xMax:terrainView.xMax, yMin:terrainView.yMin, yMax:terrainView.yMax };
+    } else if (event.touches.length === 2){
+      terrainView.dragging = false;
+      _tp.pinching = true;
+      var t0 = event.touches[0], t1 = event.touches[1];
+      _tp.dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+      _tp.midX = (t0.clientX + t1.clientX) / 2;
+      _tp.midY = (t0.clientY + t1.clientY) / 2;
+      _tp.startView = { xMin:terrainView.xMin, xMax:terrainView.xMax, yMin:terrainView.yMin, yMax:terrainView.yMax };
+    }
+  }, { passive:false });
+  canvas.addEventListener('touchmove', function(event){
+    event.preventDefault();
+    if (_tp.pinching && event.touches.length === 2){
+      var t0 = event.touches[0], t1 = event.touches[1];
+      var d = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+      var factor = Math.max(0.02, Math.min(50, _tp.dist / d)); /* 双指张开 → factor<1 → 放大 */
+      var base = _tp.startView;
+      var rect = canvas.getBoundingClientRect();
+      var ax = (_tp.midX - rect.left) * canvas.width / rect.width;
+      var ay = (_tp.midY - rect.top) * canvas.height / rect.height;
+      var anchor = {
+        x: base.xMin + ax / canvas.width * (base.xMax - base.xMin),
+        y: base.yMax - ay / canvas.height * (base.yMax - base.yMin)
+      };
+      terrainView.xMin = anchor.x - (anchor.x - base.xMin) * factor;
+      terrainView.xMax = anchor.x + (base.xMax - anchor.x) * factor;
+      terrainView.yMin = anchor.y - (anchor.y - base.yMin) * factor;
+      terrainView.yMax = anchor.y + (base.yMax - anchor.y) * factor;
+      scheduleTerrainPreviewDraw();
+    } else if (!_tp.pinching && event.touches.length === 1 && terrainView.dragging){
+      var base2 = terrainView.startView, now = toWorld(event.touches[0], base2), start = terrainView.start;
+      var dx = start.x - now.x, dy = start.y - now.y;
+      terrainView.xMin = base2.xMin + dx; terrainView.xMax = base2.xMax + dx;
+      terrainView.yMin = base2.yMin + dy; terrainView.yMax = base2.yMax + dy;
+      scheduleTerrainPreviewDraw();
+    }
+  }, { passive:false });
+  canvas.addEventListener('touchend', function(event){
+    if (_tp.pinching && event.touches.length < 2) _tp.pinching = false;
+    if (event.touches.length === 1){
+      /* 双指抬起一指后，从剩余手指继续拖动 */
+      terrainView.dragging = true;
+      terrainView.start = toWorld(event.touches[0]);
+      terrainView.startView = { xMin:terrainView.xMin, xMax:terrainView.xMax, yMin:terrainView.yMin, yMax:terrainView.yMax };
+    } else if (!event.touches.length){
+      terrainView.dragging = false;
+    }
+  });
 }
 
 function drawTerrainPreview(){
@@ -1697,9 +1847,10 @@ function renderExport(p){
     '</div>' +
     section('导出操作') +
     '<div class="export-actions">' +
+      '<button class="btn btn-block btn-primary" onclick="exportPlanetPack()">导出行星包 (.zip)</button>' +
       '<button class="btn btn-block" onclick="exportSinglePlanet()">导出当前天体 (.txt)</button>' +
       '<button class="btn btn-block" onclick="saveProject()">保存项目 (.sfsproj)</button>' +
-      '<div class="hint">顶部工具栏的「导出行星包」按钮可打包为 SFS 可用的 .zip 文件。</div>' +
+      '<div class="hint">导出行星包会打包为 SFS 可用的 .zip 文件（含元数据与空间中心设置）。</div>' +
     '</div>';
 }
 
@@ -1795,7 +1946,7 @@ function renderOrbitViewTab(p){
       '<canvas id="orbitCanvas" width="800" height="420" style="width:100%;height:auto;aspect-ratio:800 / 420;display:block;cursor:grab;"></canvas>' +
       '<div style="position:absolute;top:6px;left:6px;font-size:0.78rem;color:#666;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;">' +
         (isChildren ? '当前: 子天体视图 · ' : '当前: 父级视图 · ') +
-        '滚轮缩放 · 拖拽平移 · 双击选中行星' +
+        '拖拽平移 · 滚轮/双指缩放 · 双击或轻点选中行星' +
       '</div>' +
     '</div>' +
     renderOrbitValuesTable(bodies, p) +
@@ -2662,16 +2813,84 @@ function toggleSidebar(){
   sb.classList.toggle('open');
   bd.classList.toggle('show');
 }
+
+/* ============================================================
+   移动端分页视图（底部导航）
+   state._mobView: 'bodies' | 'edit' | 'preview' | 'export'
+   桌面端（>=640px）不启用，CSS 负责布局。
+============================================================ */
+function isMobileLayout(){ return window.innerWidth < 640; }
+
+function setMobileView(v){
+  if (['bodies','edit','preview','export'].indexOf(v) < 0) return;
+  state._mobView = v;
+  if (v === 'export' && currentPlanet() && state.activeTab !== 'export') switchTab('export');
+  applyMobileView();
+}
+
+function applyMobileView(){
+  const mob = isMobileLayout();
+  const sidebar = document.getElementById('sidebar');
+  const content = document.getElementById('editorContent');
+  const rp = document.getElementById('rightPanel');
+  const empty = document.getElementById('emptyState');
+  const menu = document.getElementById('moreMenu');
+  if (menu) menu.classList.remove('open');
+  document.body.classList.toggle('has-mob-nav', mob);
+  const has = state.planets.length > 0;
+  if (!mob){
+    // 恢复桌面布局：可见性交回原有逻辑
+    state._mobView = null;
+    sidebar.classList.remove('mob-static');
+    content.classList.remove('mob-export-view');
+    empty.style.display = has ? 'none' : '';
+    content.style.display = has ? 'block' : 'none';
+    rp.style.display = currentPlanet() ? '' : 'none';
+    return;
+  }
+  if (!state._mobView) state._mobView = 'edit';
+  const v = state._mobView;
+  sidebar.classList.toggle('mob-static', v === 'bodies');
+  content.classList.toggle('mob-export-view', v === 'export');
+  empty.style.display = has ? 'none' : '';
+  content.style.display = (has && (v === 'edit' || v === 'export')) ? 'block' : 'none';
+  rp.style.display = (has && v === 'preview') ? '' : 'none';
+  document.querySelectorAll('#mobNav .mob-nav-item').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-view') === v);
+  });
+}
+
+/* 「更多」菜单（移动端工具栏） */
+function toggleMoreMenu(){
+  const menu = document.getElementById('moreMenu');
+  if (menu) menu.classList.toggle('open');
+}
+function runMore(action){
+  const menu = document.getElementById('moreMenu');
+  if (menu) menu.classList.remove('open');
+  if (action === 'addBody') return showAddBodyModal();
+  if (action === 'texture') return showTextureCreator();
+  if (action === 'assets') return showAssetManager();
+  if (action === 'importTextures') return document.getElementById('textureFiles').click();
+  if (action === 'importPack') return document.getElementById('packFiles').click();
+  if (action === 'exportPack') return exportPlanetPack();
+}
+document.addEventListener('click', function(e){
+  const menu = document.getElementById('moreMenu');
+  if (!menu || !menu.classList.contains('open')) return;
+  if (e.target.closest('#moreMenu') || e.target.closest('#btnMore')) return;
+  menu.classList.remove('open');
+});
+
 function updateResponsive(){
   const isMob = window.innerWidth < 640;
-  const toggleBtn = document.getElementById('sidebarToggle');
   const closeBtn = document.getElementById('sidebarClose');
-  if (toggleBtn) toggleBtn.style.display = isMob ? 'inline-flex' : 'none';
-  if (closeBtn) closeBtn.style.display = isMob ? 'inline-flex' : 'none';
+  if (closeBtn) closeBtn.style.display = 'none';
   if (!isMob){
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebarBackdrop').classList.remove('show');
   }
+  applyMobileView();
 }
 window.addEventListener('resize', updateResponsive);
 
@@ -2864,6 +3083,60 @@ function initOrbitCanvas(){
   canvas.addEventListener('mouseup', () => _orbitDragging = false);
   canvas.addEventListener('mouseleave', () => _orbitDragging = false);
   canvas.addEventListener('dblclick', e => { selectOrbitPlanet(_cc(e).x, _cc(e).y); });
+  /* ---- 触屏：单指拖动，双指捏合缩放，轻点选中天体 ---- */
+  var _ot = { pinching:false, dist:0, scale0:1, offX:0, offY:0, midX:0, midY:0, tapX:0, tapY:0, tapTime:0, moved:false };
+  function _tc(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) * canvas.width / rect.width, y: (e.clientY - rect.top) * canvas.height / rect.height };
+  }
+  canvas.addEventListener('touchstart', function(e){
+    e.preventDefault();
+    if (e.touches.length === 1){
+      _orbitDragging = true; _ot.moved = false; _ot.tapTime = Date.now();
+      var c = _tc(e.touches[0]);
+      _orbitLastX = c.x; _orbitLastY = c.y; _ot.tapX = c.x; _ot.tapY = c.y;
+    } else if (e.touches.length === 2){
+      _orbitDragging = false; _ot.pinching = true;
+      var t0 = e.touches[0], t1 = e.touches[1];
+      _ot.dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+      _ot.scale0 = _orbitScale; _ot.offX = _orbitOffsetX; _ot.offY = _orbitOffsetY;
+      _ot.midX = (t0.clientX + t1.clientX) / 2; _ot.midY = (t0.clientY + t1.clientY) / 2;
+    }
+  }, { passive:false });
+  canvas.addEventListener('touchmove', function(e){
+    e.preventDefault();
+    if (_ot.pinching && e.touches.length === 2){
+      var t0 = e.touches[0], t1 = e.touches[1];
+      var d = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+      var scale = Math.max(0.05, Math.min(20, _ot.scale0 * d / _ot.dist));
+      var f = scale / _ot.scale0;
+      var rect = canvas.getBoundingClientRect();
+      var mx = (_ot.midX - rect.left) * canvas.width / rect.width;
+      var my = (_ot.midY - rect.top) * canvas.height / rect.height;
+      _orbitOffsetX = (mx - canvas.width / 2) * (1 - f) + f * _ot.offX;
+      _orbitOffsetY = (my - canvas.height / 2) * (1 - f) + f * _ot.offY;
+      _orbitScale = scale;
+      scheduleOrbitPreviewDraw();
+    } else if (!_ot.pinching && e.touches.length === 1 && _orbitDragging){
+      var c = _tc(e.touches[0]);
+      if (Math.abs(c.x - _ot.tapX) > 6 || Math.abs(c.y - _ot.tapY) > 6) _ot.moved = true;
+      _orbitOffsetX += c.x - _orbitLastX;
+      _orbitOffsetY += c.y - _orbitLastY;
+      _orbitLastX = c.x; _orbitLastY = c.y;
+      scheduleOrbitPreviewDraw();
+    }
+  }, { passive:false });
+  canvas.addEventListener('touchend', function(e){
+    if (_ot.pinching && e.touches.length < 2) _ot.pinching = false;
+    if (e.touches.length === 1){
+      _orbitDragging = true;
+      var c = _tc(e.touches[0]); _orbitLastX = c.x; _orbitLastY = c.y;
+    } else if (!e.touches.length){
+      _orbitDragging = false;
+      /* 轻点（未移动、短按）= 选中天体，等价桌面端双击 */
+      if (!_ot.moved && Date.now() - _ot.tapTime < 350) selectOrbitPlanet(_ot.tapX, _ot.tapY);
+    }
+  });
 }
 
 function drawOrbitView(){
