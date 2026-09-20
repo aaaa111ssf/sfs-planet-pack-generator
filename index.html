@@ -2,8 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>SFS 行星包生成器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23111' stroke-width='2'/%3E%3Cellipse cx='16' cy='16' rx='11' ry='4.5' fill='none' stroke='%23111' stroke-width='2'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#fafafa; --surface:#fff; --surface-2:#f5f5f5; --surface-3:#efefef;
@@ -12,6 +15,27 @@
   --radius:2px;
   --shadow:0 1px 2px rgba(0,0,0,0.04);
 }
+/* ============================================================
+   深色主题（黑夜模式）：只覆盖变量，结构不动
+============================================================ */
+html[data-theme="dark"]{
+  --bg:#101010; --surface:#161616; --surface-2:#1d1d1d; --surface-3:#262626;
+  --text:#ececec; --text-muted:#9a9a9a; --text-faint:#6f6f6f;
+  --border:#303030; --border-strong:#454545;
+  --shadow:0 1px 2px rgba(0,0,0,0.5);
+  color-scheme:dark;
+}
+html[data-theme="light"]{color-scheme:light;}
+/* 硬编码颜色在深色下的覆盖 */
+html[data-theme="dark"] .modal-overlay{background:rgba(0,0,0,0.55);}
+html[data-theme="dark"] .modal{box-shadow:0 8px 30px rgba(0,0,0,0.6);}
+html[data-theme="dark"] .btn-primary{background:var(--text);color:#111;border-color:var(--text);}
+html[data-theme="dark"] .btn-primary:hover{background:#fff;}
+html[data-theme="dark"] .toast{background:var(--text);color:#111;}
+html[data-theme="dark"] .mob-nav{box-shadow:0 -1px 4px rgba(0,0,0,0.5);}
+html[data-theme="dark"] .more-menu{box-shadow:0 6px 24px rgba(0,0,0,0.6);}
+html[data-theme="dark"] .orbit-hint{background:rgba(0,0,0,0.65);color:#d8d8d8;}
+html[data-theme="dark"] .sidebar{box-shadow:0 4px 20px rgba(0,0,0,0.5);}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
@@ -271,6 +295,45 @@ select{cursor:pointer;}
   /* 纹理创建弹窗：双栏改单栏 */
   .tex-creator-grid{grid-template-columns:1fr !important;}
 }
+
+/* ============================================================
+   全屏沉浸：viewport-fit=cover 后内容会延伸到系统栏，
+   用 env(safe-area-inset-*) 把内容顶回来（不支持 env 的浏览器回落 0）
+============================================================ */
+body{
+  padding-top:env(safe-area-inset-top,0px);
+  padding-left:env(safe-area-inset-left,0px);
+  padding-right:env(safe-area-inset-right,0px);
+}
+.orbit-hint{background:rgba(255,255,255,0.85);color:#666;}
+
+/* ---- 沉浸模式：收起页头 / 工具栏 / 底部导航，编辑区最大化 ---- */
+body.immersive header{display:none;}
+body.immersive .toolbar{display:none;}
+body.immersive .mob-nav{transform:translateY(120%);pointer-events:none;}
+body.immersive .app{padding:0 0 env(safe-area-inset-bottom,0px);}
+body.immersive .content,
+body.immersive .right-panel,
+body.immersive .sidebar.mob-static{border-radius:0;border-left:none;border-right:none;}
+body.immersive .main-grid{gap:0;}
+.mob-nav{transition:transform .25s;}
+
+.immersive-exit{
+  position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;z-index:600;
+  display:none;align-items:center;gap:6px;
+  padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text);font-size:0.78rem;font-family:inherit;
+  cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.12);opacity:0.55;transition:opacity .2s;
+}
+.immersive-exit:hover{opacity:1;}
+body.immersive .immersive-exit{display:inline-flex;}
+.immersive-exit kbd{
+  font-family:inherit;font-size:0.7rem;border:1px solid var(--border);
+  border-radius:2px;padding:0 4px;color:var(--text-muted);
+}
+
+/* 主题 / 沉浸切换按钮：只显示图标，跟站点极简风一致 */
+.btn-icon{min-width:38px;padding:8px 10px;font-size:0.95rem;line-height:1;}
 </style>
 </head>
 <body>
@@ -293,6 +356,8 @@ select{cursor:pointer;}
     <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
     <button class="btn hide-mob" onclick="document.getElementById('packFiles').click()">导入行星包</button>
     <button class="btn btn-primary hide-mob" onclick="exportPlanetPack()">导出行星包</button>
+    <button class="btn btn-icon hide-mob" id="themeBtn" onclick="cycleTheme()" title="深色 / 浅色">☾</button>
+    <button class="btn btn-icon hide-mob" id="immersiveBtn" onclick="toggleImmersive()" title="沉浸模式">⛶</button>
     <button class="btn show-mob" id="btnMore" onclick="toggleMoreMenu()">更多 ▾</button>
     <div class="more-menu" id="moreMenu">
       <button class="btn" onclick="runMore('addBody')">添加天体</button>
@@ -301,6 +366,8 @@ select{cursor:pointer;}
       <button class="btn" onclick="runMore('assets')">资源管理</button>
       <button class="btn" onclick="runMore('importPack')">导入行星包</button>
       <button class="btn" onclick="runMore('exportPack')">导出行星包</button>
+      <button class="btn" id="moreThemeBtn" onclick="runMore('theme')">深色 / 浅色</button>
+      <button class="btn" id="moreImmersiveBtn" onclick="runMore('immersive')">沉浸模式</button>
     </div>
     <input type="file" id="projFile" accept=".sfsproj,.json" style="display:none" onchange="openProject(event)">
     <input type="file" id="packFiles" accept=".txt,.json" multiple style="display:none" onchange="importPackFiles(event)">
@@ -384,6 +451,8 @@ select{cursor:pointer;}
     </div>
   </div>
 </div>
+
+<button class="immersive-exit" id="immersiveExit" onclick="toggleImmersive(false)">退出沉浸 <kbd>Esc</kbd></button>
 
 <!-- Mobile bottom navigation -->
 <nav class="mob-nav" id="mobNav">
@@ -1145,7 +1214,8 @@ function renderActiveTab(){
   if (!p){ el.innerHTML = ''; clearPreviewPanels(); return; }
 
   // 右侧仅显示星球数据、真实地形轮廓与轨道预览。
-  rpEl.style.display = '';
+  // 移动端分页视图下，只有「预览」页显示右栏（否则会被 applyMobileView 重新隐藏）。
+  rpEl.style.display = (window.innerWidth < 640 && state._mobView !== 'preview') ? 'none' : '';
   let rpHtml = '';
   rpHtml += '<div class="section-title">星球数据</div>';
   rpHtml += renderPlanetDataSummary(p);
@@ -1155,6 +1225,12 @@ function renderActiveTab(){
   rpHtml += renderTerrainAndJsonPreview(p);
   rpContent.innerHTML = rpHtml;
   updateJsonPreview();
+  /* 右栏是整块重建的，旧 canvas 已脱离文档：清掉缓存引用并在下一帧重画，
+     这样所有调用 renderActiveTab 的地方（启用开关 / 增删雾键 / 地标 / 光环 / 切标签…）
+     都能自动恢复预览，不再需要手动刷新。 */
+  _orbitCanvas = null; _orbitCtx = null;
+  if (typeof terrainView !== 'undefined') terrainView.frame = 0;
+  setTimeout(function(){ if (!document.getElementById('orbitCanvas')) return; initOrbitCanvas(); drawOrbitView(); drawTerrainPreview(); }, 0);
 
   let html = '';
   switch(state.activeTab){
@@ -1209,7 +1285,13 @@ function onRadiusUnitChange(){
   if (unit === 'km') meters = val * 1000;
   else if (unit === 'AU') meters = val * 1.496e11;
   const p = currentPlanet();
-  if (p){ p.BASE_DATA.radius = meters; updateJsonPreview(); renderTree(); }
+  /* 半径影响地形采样(period=lengthM/radius)与轨道布局，必须重画两张预览，
+     否则改半径后预览纹丝不动，只有刷新页面才更新。 */
+  if (p){
+    p.BASE_DATA.radius = meters;
+    updateJsonPreview(); renderTree();
+    scheduleTerrainPreviewDraw(); scheduleOrbitPreviewDraw();
+  }
 }
 
 function renderAtmoPhys(p){
@@ -1508,7 +1590,7 @@ function renderTerrainAndJsonPreview(p){
         '<div class="section-title" style="margin:0;border:0;padding:0;">地形预览 (极坐标轮廓)</div>'+
         '<div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="zoomTerrainPreview(0.8)">放大</button><button class="btn btn-sm" onclick="zoomTerrainPreview(1.2)">缩小</button><button class="btn btn-sm" onclick="resetTerrainPreview()">复位</button></div>'+
       '</div>'+
-      '<canvas id="terrainPreviewCanvas" width="400" height="300" style="border:1px solid var(--border);border-radius:var(--radius);max-width:100%;height:auto;background:#fff;"></canvas>'+
+      '<canvas id="terrainPreviewCanvas" width="400" height="300" style="border:1px solid var(--border);border-radius:var(--radius);max-width:100%;height:auto;background:var(--surface-2);"></canvas>'+
       '<div id="terrainPreviewStatus" class="help-text" style="margin-top:6px;"></div>'+
     '</div>'+
     '<div style="width:100%"><div class="section-title">JSON 预览</div><div class="json-preview" id="jsonPreview"></div></div>' +
@@ -1590,7 +1672,10 @@ function sampleHeightmap(points, value, clamped){
 }
 
 function getTerrainSamples(planet, count, formulas){
-  var key = [planet._id, count, JSON.stringify(formulas || []), state.heightmapRevision || 0].join('|');
+  /* 采样依赖半径（period = lengthM / radius），半径必须进 key，
+     否则改半径后命中旧缓存，地形轮廓不更新（看起来像预览卡住）。 */
+  var radiusKey = (planet && planet.BASE_DATA && planet.BASE_DATA.radius) || 0;
+  var key = [planet._id, count, JSON.stringify(formulas || []), state.heightmapRevision || 0, radiusKey].join('|');
   if (terrainSampleCache.key === key && terrainSampleCache.elevations) return terrainSampleCache;
   var operations = terrainFormulaOperations(formulas), missing = [], unsupported = [], variables = {};
   function buffer(name){ if (!variables[name]) variables[name] = new Array(count).fill(0); return variables[name]; }
@@ -1777,9 +1862,10 @@ function drawTerrainPreview(){
   var formulas = getNormalTerrainFormulaLines(p.TERRAIN_DATA);
   var samples = getTerrainSamples(p, count, formulas), missing = samples.missing, unsupported = samples.unsupported || [], elevations = samples.elevations;
 
-  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  var tc = themeColors();
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = tc.canvasBg; ctx.fillRect(0, 0, W, H);
   var origin = toCanvas(0, 0);
-  ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 1; ctx.setLineDash([2,3]);
+  ctx.strokeStyle = tc.grid; ctx.lineWidth = 1; ctx.setLineDash([2,3]);
   ctx.beginPath(); ctx.moveTo(11, origin.y); ctx.lineTo(W - 11, origin.y); ctx.moveTo(origin.x, 11); ctx.lineTo(origin.x, H - 11); ctx.stroke(); ctx.setLineDash([]);
   var drawCircle = function(radialM, color, dash){
     var point = toCanvas(0, 0), radialPx = radialM * pxPerM;
@@ -1806,8 +1892,8 @@ function drawTerrainPreview(){
   ctx.closePath();
   var mc = p.BASE_DATA.mapColor || {r:0.5,g:0.5,b:0.5,a:1};
   ctx.fillStyle = 'rgba('+Math.round((mc.r || 0)*255)+','+Math.round((mc.g || 0)*255)+','+Math.round((mc.b || 0)*255)+',0.4)'; ctx.fill();
-  ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.stroke();
-  ctx.fillStyle = '#555'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+  ctx.strokeStyle = tc.label; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = tc.labelSub; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
   ctx.fillText('0°', W - 34, origin.y - 5); ctx.fillText('90°', origin.x + 5, 18); ctx.fillText('R ' + fmtNum(radius) + 'm', 13, H - 13);
   var status = document.getElementById('terrainPreviewStatus');
   if (status) {
@@ -1942,9 +2028,9 @@ function renderOrbitViewTab(p){
       '<button class="btn btn-sm'+(isChildren?' btn-primary':'')+'" onclick="setOrbitViewMode(\'children\')">子天体视图</button>' +
       '<button class="btn btn-sm'+(!isChildren?' btn-primary':'')+'" onclick="setOrbitViewMode(\'parent\')">父级视图</button>' +
     '</div>' +
-    '<div style="position:relative;width:100%;aspect-ratio:800 / 420;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fafafa;">' +
+    '<div style="position:relative;width:100%;aspect-ratio:800 / 420;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg);">' +
       '<canvas id="orbitCanvas" width="800" height="420" style="width:100%;height:auto;aspect-ratio:800 / 420;display:block;cursor:grab;"></canvas>' +
-      '<div style="position:absolute;top:6px;left:6px;font-size:0.78rem;color:#666;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;">' +
+      '<div class="orbit-hint" style="position:absolute;top:6px;left:6px;font-size:0.78rem;padding:4px 8px;border-radius:4px;">' +
         (isChildren ? '当前: 子天体视图 · ' : '当前: 父级视图 · ') +
         '拖拽平移 · 滚轮/双指缩放 · 双击或轻点选中行星' +
       '</div>' +
@@ -2874,6 +2960,8 @@ function runMore(action){
   if (action === 'importTextures') return document.getElementById('textureFiles').click();
   if (action === 'importPack') return document.getElementById('packFiles').click();
   if (action === 'exportPack') return exportPlanetPack();
+  if (action === 'theme') return cycleTheme();
+  if (action === 'immersive') return toggleImmersive();
 }
 document.addEventListener('click', function(e){
   const menu = document.getElementById('moreMenu');
@@ -2892,6 +2980,80 @@ function updateResponsive(){
   }
   applyMobileView();
 }
+
+/* ============================================================
+   主题（黑夜模式）
+   存储：localStorage['sfs-ppg-theme'] = 'light' | 'dark'，
+   不存在或为其它值 = 跟随系统 prefers-color-scheme。
+============================================================ */
+const THEME_KEY = 'sfs-ppg-theme';
+const IMMERSIVE_KEY = 'sfs-ppg-immersive';
+
+function systemPrefersDark(){
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+function isDark(){ return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function themeColors(){
+  return isDark()
+    ? { canvasBg:'#161616', grid:'rgba(255,255,255,0.22)', label:'#ececec', labelSub:'#a5a5a5', outline:'rgba(255,255,255,0.7)' }
+    : { canvasBg:'#ffffff', grid:'rgba(0,0,0,0.10)',       label:'#111111', labelSub:'#555555', outline:'#222222' };
+}
+function redrawThemedCanvases(){
+  drawTerrainPreview();
+  if (typeof drawOrbitView === 'function') drawOrbitView();
+  if (typeof regenTextureTab === 'function' && document.getElementById('texTabCanvas')) { try { regenTextureTab(); } catch (_e) {} }
+}
+function syncThemeButton(){
+  const dark = isDark();
+  const tb = document.getElementById('themeBtn');
+  if (tb){ tb.textContent = dark ? '☀' : '☾'; tb.title = dark ? '切换到浅色' : '切换到深色'; }
+  const mb = document.getElementById('moreThemeBtn');
+  if (mb) mb.textContent = dark ? '浅色模式' : '深色模式';
+}
+function applyTheme(mode){
+  /* mode: 'light' | 'dark' | 'system' */
+  try {
+    if (mode === 'system') localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, mode);
+  } catch (_e) {}
+  const dark = mode === 'system' ? systemPrefersDark() : mode === 'dark';
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  syncThemeButton();
+  redrawThemedCanvases();
+}
+function cycleTheme(){ applyTheme(isDark() ? 'light' : 'dark'); }
+function initTheme(){
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (_e) {}
+  applyTheme(saved === 'light' || saved === 'dark' ? saved : 'system');
+  if (window.matchMedia){
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = function(){
+      let s = null; try { s = localStorage.getItem(THEME_KEY); } catch (_e) {}
+      if (s !== 'light' && s !== 'dark') applyTheme('system');   /* 没手动选过才跟随系统 */
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
+}
+
+/* ============================================================
+   沉浸模式：隐藏页头 / 工具栏 / 底部导航
+============================================================ */
+function toggleImmersive(force){
+  const on = force === undefined ? !document.body.classList.contains('immersive') : !!force;
+  document.body.classList.toggle('immersive', on);
+  try { localStorage.setItem(IMMERSIVE_KEY, on ? '1' : '0'); } catch (_e) {}
+  const ib = document.getElementById('immersiveBtn');
+  if (ib) ib.textContent = on ? '⛗' : '⛶';
+  const mb = document.getElementById('moreImmersiveBtn');
+  if (mb) mb.textContent = on ? '退出沉浸' : '沉浸模式';
+  applyMobileView();
+  setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 40);
+}
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && document.body.classList.contains('immersive')) toggleImmersive(false);
+});
 window.addEventListener('resize', updateResponsive);
 
 /* ============================================================
@@ -3140,6 +3302,11 @@ function initOrbitCanvas(){
 }
 
 function drawOrbitView(){
+  /* 右栏 innerHTML 重建会换掉 canvas 元素，这里自愈引用：
+     否则会画到已被移除的旧画布上，界面上表现为轨道预览空白（刷新按钮都救不回来）。 */
+  const cur = document.getElementById('orbitCanvas');
+  if (!cur) return;
+  if (_orbitCanvas !== cur || !_orbitCtx) initOrbitCanvas();
   return drawOrbitViewFixed();
   /* 旧全局比例算法保留在此处仅作历史上下文；运行时使用下方按层级等比布局。 */
   const canvas = _orbitCanvas, ctx = _orbitCtx;
@@ -3266,7 +3433,7 @@ function drawOrbitView(){
     ctx.beginPath(); ctx.arc(pos.x, pos.y, pr, 0, Math.PI * 2);
     ctx.fillStyle = 'rgb(' + Math.round(mc.r * 255) + ',' + Math.round(mc.g * 255) + ',' + Math.round(mc.b * 255) + ')';
     ctx.fill();
-    ctx.fillStyle = '#333'; ctx.font = '10px sans-serif';
+    ctx.fillStyle = themeColors().labelSub; ctx.font = '10px sans-serif';
     ctx.fillText(p.name, pos.x + pr + 3, pos.y + 3);
   });
 }
@@ -3438,8 +3605,8 @@ function drawOrbitViewFixed(){
     ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
     ctx.fillStyle = 'rgb(' + Math.round(color.r * 255) + ',' + Math.round(color.g * 255) + ',' + Math.round(color.b * 255) + ')';
     ctx.fill();
-    if (isRoot) { ctx.strokeStyle = '#222'; ctx.lineWidth = 1.2; ctx.stroke(); }
-    ctx.fillStyle = '#333'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'middle';
+    if (isRoot) { ctx.strokeStyle = themeColors().outline; ctx.lineWidth = 1.2; ctx.stroke(); }
+    ctx.fillStyle = themeColors().labelSub; ctx.font = '10px sans-serif'; ctx.textBaseline = 'middle';
     ctx.fillText(body.name, position.x + radius + 4, position.y);
   });
 }
@@ -3489,6 +3656,10 @@ function showTemplateImportModal(dataKey){
 ============================================================ */
 function init(){
   try { localStorage.removeItem('sfs-planet-pack-generator.autosave.v1'); } catch (_error) {}
+  initTheme();
+  let imm = null;
+  try { imm = localStorage.getItem(IMMERSIVE_KEY); } catch (_error) {}
+  if (imm === '1') toggleImmersive(true);
   renderTree();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
