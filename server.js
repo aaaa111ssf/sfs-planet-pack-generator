@@ -13,7 +13,8 @@ const CONTENT_TYPES = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
-  '.tga': 'image/x-tga'
+  '.tga': 'image/x-tga',
+  '.ico': 'image/x-icon'
 };
 
 const server = http.createServer((req, res) => {
