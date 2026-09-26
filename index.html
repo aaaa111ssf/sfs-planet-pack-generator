@@ -352,6 +352,10 @@ body.immersive .immersive-exit{display:inline-flex;}
 body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
 .join-fab{transition:transform .25s, box-shadow .2s;}
 
+/* 工具栏分组分隔线（竖线），移动端隐藏 */
+.toolbar-sep{width:1px;height:22px;background:var(--border);margin:0 4px;flex:0 0 auto;align-self:center;}
+@media(max-width:639px){.toolbar-sep{display:none;}}
+
 /* 主题 / 沉浸切换按钮：只显示图标，跟站点极简风一致 */
 .btn-icon{min-width:38px;padding:8px 10px;font-size:0.95rem;line-height:1;}
 </style>
@@ -366,16 +370,19 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
 
   <div class="toolbar">
     <button class="btn btn-primary" onclick="newProject()">新建项目</button>
+    <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
+    <button class="btn" onclick="saveProject()">保存项目</button>
+    <div class="toolbar-sep hide-mob"></div>
     <button class="btn hide-mob" onclick="showAddBodyModal()">添加天体</button>
-    <button class="btn hide-mob" onclick="showTextureCreator()">纹理创建</button>
+    <button class="btn hide-mob" onclick="document.getElementById('packFiles').click()">导入行星包</button>
+    <div class="toolbar-sep hide-mob"></div>
     <button class="btn hide-mob" onclick="document.getElementById('textureFiles').click()">导入贴图</button>
+    <button class="btn hide-mob" onclick="showTextureCreator()">纹理创建</button>
     <button class="btn hide-mob" onclick="showAssetManager()">资源管理</button>
     <div class="spacer"></div>
     <span class="asset-info hide-mob" id="assetInfo" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
-    <button class="btn" onclick="saveProject()">保存项目</button>
-    <button class="btn" onclick="document.getElementById('projFile').click()">打开项目</button>
-    <button class="btn hide-mob" onclick="document.getElementById('packFiles').click()">导入行星包</button>
     <button class="btn btn-primary hide-mob" onclick="exportPlanetPack()">导出行星包</button>
+    <div class="toolbar-sep hide-mob"></div>
     <button class="btn btn-icon hide-mob" id="themeBtn" onclick="cycleTheme()" title="深色 / 浅色">☾</button>
     <button class="btn btn-icon hide-mob" id="immersiveBtn" onclick="toggleImmersive()" title="沉浸模式">⛶</button>
     <button class="btn show-mob" id="btnMore" onclick="toggleMoreMenu()">更多 ▾</button>
@@ -390,6 +397,9 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
       <button class="btn" id="moreImmersiveBtn" onclick="runMore('immersive')">沉浸模式</button>
     </div>
     <input type="file" id="projFile" accept=".sfsproj,.json" style="display:none" onchange="openProject(event)">
+    <datalist id="texturePresets"></datalist>
+    <datalist id="heightmapPresets"></datalist>
+  </div>
     <input type="file" id="packFiles" accept=".txt,.json" multiple style="display:none" onchange="importPackFiles(event)">
     <input type="file" id="textureFiles" accept="image/png,image/jpeg,image/webp,image/bmp,image/tga" multiple style="display:none" onchange="importTextureFiles(event)">
   </div>
@@ -943,6 +953,22 @@ function textField(path,label,val,help){
     '<input type="text" data-path="'+path+'" value="'+esc(val)+'">'+
     (help?'<div class="help-text">'+help+'</div>':'')+'</div>';
 }
+/* 纹理名称输入框：带内置纹理预设下拉（datalist），仍可手输自定义名称 */
+function textureField(path,label,val,help){
+  return '<div class="form-group"><label>'+label+'</label>'+
+    '<input type="text" list="texturePresets" data-path="'+path+'" value="'+esc(val)+'">'+
+    (help?'<div class="help-text">'+help+'</div>':'')+'</div>';
+}
+function fillDatalists(){
+  const tp = document.getElementById('texturePresets');
+  if (tp && typeof BUILTIN_TEXTURES !== 'undefined'){
+    tp.innerHTML = Array.from(BUILTIN_TEXTURES).sort().map(n=>'<option value="'+esc(n)+'">').join('');
+  }
+  const hp = document.getElementById('heightmapPresets');
+  if (hp && typeof state !== 'undefined' && state.builtinHeightmapNames){
+    hp.innerHTML = Array.from(state.builtinHeightmapNames).sort().map(n=>'<option value="'+esc(n)+'">').join('');
+  }
+}
 function numField(path,label,val,step,help,extra){
   return '<div class="form-group"><label>'+label+'</label>'+
     '<input type="number" data-path="'+path+'" value="'+esc(val)+'" step="'+(step==null?1:step)+'" '+(extra||'')+'>'+
@@ -977,6 +1003,25 @@ function xyField(path,label,x,y,help){
     '<input type="number" data-path="'+path+'.x" value="'+esc(x)+'" step="1" placeholder="X">'+
     '<input type="number" data-path="'+path+'.y" value="'+esc(y)+'" step="1" placeholder="Y">'+
     '</div>'+(help?'<div class="help-text">'+help+'</div>':'')+'</div>';
+}
+/* 难度缩放（SFS 1.6）：normal/hard/realistic 三难度下的覆盖值。
+   基准值就是普通难度；hard/realistic 留空 = 继承普通（导出时该键不存在）。 */
+function diffScaleField(path, label, baseVal, help){
+  const p = currentPlanet();
+  const d = (p && getValueAtPath(p, path)) || {};
+  const cell = (key, labelText) =>
+    '<div class="form-group" style="margin-bottom:0;"><label>'+labelText+'</label>'+
+    '<input type="number" step="any" data-ds-path="'+path+'" data-ds-key="'+key+'" '+
+    'value="'+esc(d[key] == null ? '' : d[key])+'" placeholder="继承普通难度 ('+fmtNum(baseVal)+')">'+
+    '</div>';
+  return '<div class="ds-block" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin:10px 0 14px;">'+
+    '<div style="font-weight:600;font-size:0.85rem;">'+label+' — 难度缩放</div>'+
+    (help?'<div class="help-text" style="margin-top:2px;">'+help+'</div>':'')+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">'+
+      cell('Hard','困难 (Hard)') + cell('Realistic','现实 (Realistic)')+
+    '</div>'+
+    '<div class="help-text">普通难度使用上方基准值；此处填写的值仅在该难度下生效，留空 = 与普通难度相同</div>'+
+  '</div>';
 }
 function arrTextField(path,label,arr,help){
   return '<div class="form-group"><label>'+label+'</label>'+
@@ -1030,7 +1075,7 @@ function formulaItemHTML(idx, item, funcTypes, path){
     '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+
       '<select data-fi-func style="width:130px;">'+typeOpts+'</select>'+
       '<span style="'+normalStyle+'" class="fi-normal">'+
-        '<input type="text" data-fi-p0 value="'+esc(p1)+'" placeholder="参数1" style="width:80px;">'+
+        '<input type="text" data-fi-p0 list="heightmapPresets" value="'+esc(p1)+'" placeholder="参数1" style="width:80px;">'+
         '<input type="number" data-fi-p1 value="'+esc(p2)+'" placeholder="参数2" style="width:80px;">'+
         '<input type="number" data-fi-p2 value="'+esc(p3)+'" placeholder="参数3" style="width:80px;">'+
       '</span>'+
@@ -1238,8 +1283,24 @@ function renderMobTab(){
   if (!el) return;
   el.innerHTML = '<select onchange="switchTab(this.value)">'+TABS.map(t => '<option value="'+t.id+'" '+(t.id===state.activeTab?'selected':'')+'>'+t.label+'</option>').join('')+'</select>';
 }
-function switchTab(id){
-  state.activeTab = id;
+/* 切换正在编辑的地形公式难度（Normal/Hard/Realistic 各自独立一套公式） */
+function switchFormulaDifficulty(diff){
+  if (['Normal','Hard','Realistic'].indexOf(diff) < 0) return;
+  state._formulaDifficulty = diff;
+  renderActiveTab();
+  attachEventListeners();
+}
+function copyFormulaFromNormal(diff){
+  const p = currentPlanet(); if (!p) return;
+  const t = p.TERRAIN_DATA; if (!t) return;
+  const normal = getNormalTerrainFormulaLines(t);
+  const dict = t.terrainFormulaDifficulties || (t.terrainFormulaDifficulties = {});
+  dict[diff] = normal.map(function(line){ return String(line); });
+  showToast('已复制普通难度公式到 ' + diff + ' (' + normal.length + ' 行)');
+  renderActiveTab();
+  attachEventListeners();
+}
+function switchTab(id){  state.activeTab = id;
   document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active', TABS[i].id===id));
   const sel = document.querySelector('#tabMob select');
   if (sel) sel.value = id;
@@ -1316,6 +1377,8 @@ function renderBase(p){
         numField('BASE_DATA.gravity','表面重力 (m/s²)',d.gravity,0.1,'地表加速度')) +
     row(numField('BASE_DATA.timewarpHeight','时间加速高度 (米)',d.timewarpHeight,1000,'有大气层时设为大气层高度的75%-90%；无大气层时大天体设为半径1/25，小天体1/10') +
         numField('BASE_DATA.velocityArrowsHeight','速度箭头高度 (米)',d.velocityArrowsHeight,100,'箭头消失/分离的高度')) +
+    diffScaleField('BASE_DATA.radiusDifficultyScale','半径',radiusM,'困难/现实难度下的半径覆盖值（多用于小行星带里更小的天体）') +
+    diffScaleField('BASE_DATA.gravityDifficultyScale','表面重力',d.gravity||0,'困难/现实难度下的重力覆盖值') +
     section('地图颜色') +
     colorField('BASE_DATA.mapColor','地图颜色 (RGBA 0-1)',d.mapColor,'地图视图中显示的颜色，a为透明度') +
     row(checkField('BASE_DATA.significant','重要天体',d.significant,'false会隐藏该天体') +
@@ -1349,7 +1412,9 @@ function renderAtmoPhys(p){
           numField('ATMOSPHERE_PHYSICS_DATA.parachuteMultiplier','降落伞倍数',ap.parachuteMultiplier,0.1,'控制降落伞可用高度')) +
       row(numField('ATMOSPHERE_PHYSICS_DATA.upperAtmosphere','高层大气比例',ap.upperAtmosphere,0.01,'理想值0.1-0.5') +
           numField('ATMOSPHERE_PHYSICS_DATA.shockwaveIntensity','激波强度',ap.shockwaveIntensity,0.1,'大气进入时部件脱落/消失的强度')) +
-      numField('ATMOSPHERE_PHYSICS_DATA.minHeatingVelocityMultiplier','最小加热速度倍数',ap.minHeatingVelocityMultiplier,0.1,'实际速度=250m/s×此值，超过此速度开始加热');
+      numField('ATMOSPHERE_PHYSICS_DATA.minHeatingVelocityMultiplier','最小加热速度倍数',ap.minHeatingVelocityMultiplier,0.1,'实际速度=250m/s×此值，超过此速度开始加热') +
+      diffScaleField('ATMOSPHERE_PHYSICS_DATA.heightDifficultyScale','大气高度',ap.height||0,'困难/现实难度下的大气高度覆盖值（现实难度常更低）') +
+      diffScaleField('ATMOSPHERE_PHYSICS_DATA.curveScale','衰减曲线',ap.curve||0,'困难/现实难度下的衰减曲线覆盖值');
   }
   return html;
 }
@@ -1362,14 +1427,15 @@ function renderAtmoVis(p){
   if (av){
     const g = av.GRADIENT;
     html += section('大气渐变 (GRADIENT)') +
-      row(textField('ATMOSPHERE_VISUALS_DATA.GRADIENT.texture','纹理名称',g.texture,'默认 Atmo_Earth') +
+      row(textureField('ATMOSPHERE_VISUALS_DATA.GRADIENT.texture','纹理名称',g.texture,'默认 Atmo_Earth') +
           numField('ATMOSPHERE_VISUALS_DATA.GRADIENT.height','渐变高度 (米)',g.height,1000,'')) +
-      numField('ATMOSPHERE_VISUALS_DATA.GRADIENT.positionZ','Z轴偏移',g.positionZ,100,'纹理缩放');
+      numField('ATMOSPHERE_VISUALS_DATA.GRADIENT.positionZ','Z轴偏移',g.positionZ,100,'纹理缩放') +
+      diffScaleField('ATMOSPHERE_VISUALS_DATA.GRADIENT.heightDifficultyScale','渐变高度',g.height||0,'困难/现实难度下的渐变高度覆盖值');
 
     html += section('云层 (CLOUDS)') + enableCheckbox(av.CLOUDS,'启用云层','ATMOSPHERE_VISUALS_DATA.CLOUDS',DEFAULT_CLOUDS,'');
     if (av.CLOUDS){
       const c = av.CLOUDS;
-      html += row(textField('ATMOSPHERE_VISUALS_DATA.CLOUDS.texture','云层纹理',c.texture,'默认 Earth_Clouds') +
+      html += row(textureField('ATMOSPHERE_VISUALS_DATA.CLOUDS.texture','云层纹理',c.texture,'默认 Earth_Clouds') +
                   numField('ATMOSPHERE_VISUALS_DATA.CLOUDS.startHeight','起始高度 (米)',c.startHeight,100,'')) +
         row(numField('ATMOSPHERE_VISUALS_DATA.CLOUDS.width','宽度',c.width,1000,'设为行星周长可使纹理只重复一次') +
             numField('ATMOSPHERE_VISUALS_DATA.CLOUDS.height','厚度 (米)',c.height,1000,'')) +
@@ -1401,7 +1467,7 @@ function renderFrontClouds(p){
     '<div style="margin-bottom:10px;"><button class="btn btn-sm" onclick="showTemplateImportModal(\'FRONT_CLOUDS_DATA\')">从模板导入</button></div>' +
     enableCheckbox(fc,'启用地面前方云层','FRONT_CLOUDS_DATA',DEFAULT_FRONT_CLOUDS,'');
   if (fc){
-    html += row(textField('FRONT_CLOUDS_DATA.cloudsTexture','纹理名称',fc.cloudsTexture,'默认 Earth_Clouds_Front') +
+    html += row(textureField('FRONT_CLOUDS_DATA.cloudsTexture','纹理名称',fc.cloudsTexture,'默认 Earth_Clouds_Front') +
                 numField('FRONT_CLOUDS_DATA.cloudTextureCutout','纹理裁剪 (0-1)',fc.cloudTextureCutout,0.01,'裁掉纹理外边缘')) +
       row(numField('FRONT_CLOUDS_DATA.fadeZoneHeight','淡出高度 (米)',fc.fadeZoneHeight,1000,'云层淡出过渡区域') +
           numField('FRONT_CLOUDS_DATA.height','云层高度 (米)',fc.height,1000,'')) +
@@ -1418,15 +1484,15 @@ function renderTerrain(p){
     '<div style="margin-bottom:10px;"><button class="btn btn-sm" onclick="showTemplateImportModal(\'TERRAIN_DATA\')">从模板导入</button></div>' +
     checkField('TERRAIN_DATA.collider','启用固体表面 (碰撞体)',t.collider,'false=无表面(气态/恒星)');
   html += section('纹理数据') +
-    row(textField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.planetTexture','行星纹理',tt.planetTexture,'') +
+    row(textureField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.planetTexture','行星纹理',tt.planetTexture,'') +
         numField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.planetTextureCutout','纹理裁剪 (0-1)',tt.planetTextureCutout,0.01,'降低此值裁掉外边缘')) +
     row(numField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.planetTextureRotation','纹理旋转 (弧度)',tt.planetTextureRotation,0.01,'') +
         checkField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.planetTextureDontDistort','不扭曲纹理',tt.planetTextureDontDistort,'')) +
-    row(textField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceTexture_A','表面纹理 A',tt.surfaceTexture_A,'') +
-        textField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceTexture_B','表面纹理 B',tt.surfaceTexture_B,'阴影下纹理')) +
+    row(textureField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceTexture_A','表面纹理 A',tt.surfaceTexture_A,'') +
+        textureField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceTexture_B','表面纹理 B',tt.surfaceTexture_B,'阴影下纹理')) +
     row(xyField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceTextureSize_A','纹理A尺寸',tt.surfaceTextureSize_A.x,tt.surfaceTextureSize_A.y,'') +
         xyField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceTextureSize_B','纹理B尺寸',tt.surfaceTextureSize_B.x,tt.surfaceTextureSize_B.y,'')) +
-    row(textField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.terrainTexture_C','地形纹理 C',tt.terrainTexture_C,'') +
+    row(textureField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.terrainTexture_C','地形纹理 C',tt.terrainTexture_C,'') +
         xyField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.terrainTextureSize_C','纹理C尺寸',tt.terrainTextureSize_C.x,tt.terrainTextureSize_C.y,'')) +
     row3(numField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.surfaceLayerSize','表面层大小',tt.surfaceLayerSize,1,'') +
          numField('TERRAIN_DATA.TERRAIN_TEXTURE_DATA.minFade','最小淡化',tt.minFade,0.01,'') +
@@ -1438,9 +1504,17 @@ function renderTerrain(p){
     row(numField('TERRAIN_DATA.verticeSize','顶点大小',t.verticeSize,0.1,'地形分辨率，越小越精细但大行星可能卡顿') +
         '<div class="form-group"></div>');
 
-  const formulaKey = getNormalTerrainFormulaKey(t);
-  html += section('地形公式 (' + formulaKey + ')') +
-    formulaEditorHTML('TERRAIN_DATA.terrainFormulaDifficulties.'+formulaKey,'公式列表',getNormalTerrainFormulaLines(t),TERRAIN_FUNC_TYPES,'如 OUTPUT = AddHeightMap(Perlin,19030,35)');
+  const fd = state._formulaDifficulty || getNormalTerrainFormulaKey(t);
+  const fdLines = (t.terrainFormulaDifficulties && t.terrainFormulaDifficulties[fd]) || [];
+  const fdKey = fd === 'Normal' ? getNormalTerrainFormulaKey(t) : fd;
+  html += section('地形公式') +
+    '<div class="form-group"><label>难度</label><select onchange="switchFormulaDifficulty(this.value)" style="max-width:220px;">' +
+      ['Normal','Hard','Realistic'].map(k => '<option value="'+k+'"'+(fd===k?' selected':'')+'>'+k+(k==='Normal'?' (基准)':'')+'</option>').join('') +
+    '</select>' +
+    (fd !== 'Normal' ? '<div class="help-text">留空时游戏通常沿用普通难度的地形；也可点下方按钮从普通难度复制一份再改</div>' +
+      '<div class="add-btn-wrap"><button class="btn btn-sm" onclick="copyFormulaFromNormal(\''+fd+'\')">从普通难度复制公式</button></div>' : '') +
+    '</div>' +
+    formulaEditorHTML('TERRAIN_DATA.terrainFormulaDifficulties.'+fdKey,'公式列表 ('+fd+')',fdLines,TERRAIN_FUNC_TYPES,'如 OUTPUT = AddHeightMap(Perlin,19030,35)');
 
   html += section('贴图公式') +
     formulaEditorHTML('TERRAIN_DATA.textureFormula','贴图公式',t.textureFormula,TEXTURE_FUNC_TYPES,'纹理跟随地形形状');
@@ -1487,7 +1561,7 @@ function renderWater(p){
     '<div style="margin-bottom:10px;"><button class="btn btn-sm" onclick="showTemplateImportModal(\'WATER_DATA\')">从模板导入</button></div>' +
     enableCheckbox(w,'启用水体','WATER_DATA',DEFAULT_WATER,'');
   if (w){
-    html += row(textField('WATER_DATA.oceanMaskTexture','海洋遮罩纹理',w.oceanMaskTexture,'默认 Earth_OceanMask_V2') +
+    html += row(textureField('WATER_DATA.oceanMaskTexture','海洋遮罩纹理',w.oceanMaskTexture,'默认 Earth_OceanMask_V2') +
                 checkField('WATER_DATA.lowerTerrain','降低地形',w.lowerTerrain,'')) +
       numField('WATER_DATA.oceanDepth','海洋深度 (米)',w.oceanDepth,10,'') +
       section('颜色') +
@@ -1531,7 +1605,7 @@ function renderRings(p){
     '<input type="checkbox" '+(checked?'checked':'')+' onchange="toggleRings(this.checked)">'+
     '<label>启用光环</label></div><div class="help-text">围绕天体的环状结构</div></div>';
   if (r){
-    html += row(textField('RINGS_DATA.ringsTexture','光环纹理',r.ringsTexture,'默认 Saturn_Rings') +
+    html += row(textureField('RINGS_DATA.ringsTexture','光环纹理',r.ringsTexture,'默认 Saturn_Rings') +
                 numField('RINGS_DATA.positionZ','Z轴偏移',r.positionZ,100,'')) +
       row(numField('RINGS_DATA.startRadius','内半径 (米)',r.startRadius,1000,'') +
           numField('RINGS_DATA.endRadius','外半径 (米)',r.endRadius,1000,'')) +
@@ -1578,7 +1652,9 @@ function renderOrbit(p){
         selField('ORBIT_DATA.direction','方向',o.direction,[
           {value:1,label:'1 顺行'},{value:-1,label:'-1 逆行'},{value:300,label:'300 静止'}
         ],'1=顺行, -1=逆行, 300=静止')) +
-    numField('ORBIT_DATA.multiplierSOI','SOI倍数',o.multiplierSOI,0.1,'影响范围乘数，现实值用 1.0');
+    numField('ORBIT_DATA.multiplierSOI','SOI倍数',o.multiplierSOI,0.1,'影响范围乘数，现实值用 1.0') +
+    diffScaleField('ORBIT_DATA.smaDifficultyScale','半长轴',o.semiMajorAxis||0,'困难/现实难度下的轨道高度覆盖值（现实难度常更远）') +
+    diffScaleField('ORBIT_DATA.soiDifficultyScale','SOI倍数',o.multiplierSOI||0,'困难/现实难度下的影响范围乘数覆盖值');
 }
 
 function renderLandmarks(p){
@@ -2201,6 +2277,20 @@ function attachEventListeners(){
       else if (e.target.type === 'number') v = parseFloat(e.target.value) || 0;
       else v = e.target.value;
       setValueAtPath(state, path, v);
+    });
+  });
+
+  /* 难度缩放：留空删除该键（= 继承普通难度），填数写入 */
+  root.querySelectorAll('[data-ds-key]').forEach(el => {
+    el.addEventListener('input', () => {
+      const p = currentPlanet(); if (!p) return;
+      const dict = getValueAtPath(p, el.dataset.dsPath);
+      const d = (dict && typeof dict === 'object' && !Array.isArray(dict)) ? dict : {};
+      const v = parseFloat(el.value);
+      if (Number.isFinite(v)) d[el.dataset.dsKey] = v;
+      else delete d[el.dataset.dsKey];
+      setValueAtPath(p, el.dataset.dsPath, d);
+      updateJsonPreview();
     });
   });
 }
@@ -3723,6 +3813,7 @@ function init(){
   try { imm = localStorage.getItem(IMMERSIVE_KEY); } catch (_error) {}
   if (imm === '1') toggleImmersive(true);
   renderTree();
+  fillDatalists();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
   fetch('builtin_planets.json', { cache:'no-store' }).then(function(response){
@@ -3756,6 +3847,7 @@ function init(){
       } catch (_error) {}
     });
     state.heightmapLoadState = 'ready';
+    fillDatalists();   /* 高度图名列表此时才完整，重填 datalist */
     invalidateTerrainSamples();
     drawTerrainPreview();
   }).catch(function(){ state.heightmaps = {}; state.heightmapSources = {}; state.heightmapLoadState = 'failed'; invalidateTerrainSamples(); drawTerrainPreview(); });
