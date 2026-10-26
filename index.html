@@ -278,6 +278,8 @@ select{cursor:pointer;}
 }
 .more-menu.open{display:flex;}
 .more-menu .btn{flex:0 0 auto;width:100%;text-align:left;}
+/* 「工具」下拉：位置由 JS 按按钮锚定 */
+.tools-menu{left:0;right:auto;top:auto;}
 
 /* 桌面默认隐藏「更多」按钮 */
 .show-mob{display:none;}
@@ -373,8 +375,60 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
 .toolbar-sep{width:1px;height:22px;background:var(--border);margin:0 4px;flex:0 0 auto;align-self:center;}
 @media(max-width:639px){.toolbar-sep{display:none;}}
 
+/* 移动端自绘下拉（替代原生全屏选择器） */
+.mselect-menu{
+  position:absolute;top:100%;left:0;z-index:1300;
+  min-width:100%;width:max-content;max-width:min(340px, calc(100vw - 24px));
+  max-height:260px;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius);
+  box-shadow:0 8px 28px rgba(0,0,0,0.22);padding:4px 0;margin-top:4px;
+}
+.mselect-menu.mselect-up{top:auto;bottom:100%;margin-top:0;margin-bottom:4px;}
+.mselect-item{padding:10px 14px;font-size:0.95rem;color:var(--text);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mselect-item.selected{font-weight:600;background:var(--surface-3);}
+.mselect-item[data-disabled]{opacity:0.45;pointer-events:none;}
+@media(max-width:639px){ .mselect-item{padding:11px 16px;font-size:1rem;} }
+
 /* 主题 / 沉浸切换按钮：只显示图标，跟站点极简风一致 */
 .btn-icon{min-width:38px;padding:8px 10px;font-size:0.95rem;line-height:1;}
+
+/* ===== 地形编辑器 ===== */
+.te-modal{max-width:1000px;}
+.te-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.te-head h2{margin:0;}
+.te-head-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.te-body{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(230px,0.75fr);gap:16px;}
+.te-canvas-wrap{position:relative;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+#teCanvas{display:block;width:100%;height:380px;touch-action:none;cursor:crosshair;}
+.te-hint{position:absolute;left:10px;bottom:7px;font-size:0.78rem;color:var(--text-muted);pointer-events:none;}
+.te-side{display:flex;flex-direction:column;gap:10px;}
+.te-side .form-group{margin:0;}
+.te-side .form-group label{font-size:0.86rem;}
+.te-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;}
+.seg{display:flex;gap:6px;}
+.seg .btn.active{background:var(--text);color:var(--surface);border-color:var(--text);}
+.te-hr{border:0;border-top:1px solid var(--border);margin:4px 0;}
+.te-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+@media(max-width:760px){
+  .te-body{grid-template-columns:1fr;}
+  #teCanvas{height:280px;}
+  .te-modal{max-width:100%;}
+}
+
+/* ===== 行星包压缩 ===== */
+.pc-section{border-top:1px solid var(--border);padding-top:12px;margin-top:12px;}
+.pc-section:first-of-type{border-top:0;padding-top:0;margin-top:0;}
+.pc-label{font-size:0.78rem;letter-spacing:0.12em;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;}
+.pc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.pc-name{font-size:0.85rem;color:var(--text-muted);word-break:break-all;}
+.pc-check{display:flex;align-items:center;gap:8px;font-size:0.92rem;margin:10px 0 6px;}
+.pc-slider{display:flex;align-items:center;gap:10px;font-size:0.85rem;color:var(--text-muted);}
+.pc-slider input[type=range]{flex:1;accent-color:var(--text);min-width:80px;}
+.pc-slider output{min-width:46px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums;}
+.pc-bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden;margin:8px 0;}
+.pc-bar>div{height:100%;width:0;background:var(--text);transition:width .15s;}
+#pcResult{margin-top:10px;font-size:0.92rem;line-height:1.6;}
+#pcResult b{font-weight:600;}
 </style>
 </head>
 <body>
@@ -396,6 +450,12 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
     <button class="btn hide-mob" onclick="document.getElementById('textureFiles').click()">导入贴图</button>
     <button class="btn hide-mob" onclick="showTextureCreator()">纹理创建</button>
     <button class="btn hide-mob" onclick="showAssetManager()">资源管理</button>
+    <div class="toolbar-sep hide-mob"></div>
+    <button class="btn hide-mob" id="btnTools" onclick="toggleToolsMenu()">工具 ▾</button>
+    <div class="more-menu tools-menu" id="toolsMenu">
+      <button class="btn" onclick="runTool('terrainEditor')">地形编辑器</button>
+      <button class="btn" onclick="runTool('packCompress')">行星包压缩</button>
+    </div>
     <div class="spacer"></div>
     <span class="asset-info hide-mob" id="assetInfo" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
     <button class="btn btn-primary hide-mob" onclick="exportPlanetPack()">导出行星包</button>
@@ -409,6 +469,8 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
       <button class="btn" onclick="runMore('importTextures')">导入贴图</button>
       <button class="btn" onclick="runMore('assets')">资源管理</button>
       <button class="btn" onclick="runMore('importPack')">导入行星包</button>
+      <button class="btn" onclick="runMore('terrainEditor')">地形编辑器</button>
+      <button class="btn" onclick="runMore('packCompress')">行星包压缩</button>
       <button class="btn" onclick="runMore('exportPack')">导出行星包</button>
       <button class="btn" id="moreThemeBtn" onclick="runMore('theme')">深色 / 浅色</button>
       <button class="btn" id="moreImmersiveBtn" onclick="runMore('immersive')">沉浸模式</button>
@@ -603,6 +665,112 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('textureModal')">关闭</button>
       <button class="btn btn-primary" onclick="saveTextureToCache()">保存到缓存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 地形编辑器 -->
+<div class="modal-overlay" id="terrainEditorModal">
+  <div class="modal te-modal">
+    <div class="te-head">
+      <h2>地形编辑器</h2>
+      <div class="te-head-actions">
+        <button class="btn btn-sm" onclick="teUndo()">撤销</button>
+        <button class="btn btn-sm" onclick="teClear()">清空</button>
+        <button class="btn btn-sm" onclick="closeModal('terrainEditorModal')">关闭</button>
+      </div>
+    </div>
+    <div class="te-body">
+      <div class="te-canvas-wrap">
+        <canvas id="teCanvas"></canvas>
+        <div class="te-hint" id="teHint">拖动绘制地形轮廓 · 直角坐标</div>
+      </div>
+      <div class="te-side">
+        <div class="form-group">
+          <label>视图</label>
+          <div class="seg">
+            <button class="btn btn-sm active" id="teRectBtn" onclick="teSetView('rect')">直角坐标</button>
+            <button class="btn btn-sm" id="tePolarBtn" onclick="teSetView('polar')">极坐标</button>
+          </div>
+        </div>
+        <div class="te-grid2">
+          <div class="form-group"><label>最大高度 (m)</label><input type="number" id="teMaxH" value="2000" step="100" onchange="teParamsChanged()"></div>
+          <div class="form-group"><label>最小高度 (m)</label><input type="number" id="teMinH" value="-2000" step="100" onchange="teParamsChanged()"></div>
+          <div class="form-group"><label>星球半径 (m)</label><input type="number" id="tePlanetR" value="300000" step="1000" onchange="teParamsChanged()"></div>
+          <div class="form-group"><label>采样点数</label><input type="number" id="teCount" value="256" min="8" max="4096" step="1" onchange="teResample()"></div>
+        </div>
+        <hr class="te-hr">
+        <div class="form-group">
+          <label>从高度图载入</label>
+          <select id="teSource" onchange="teLoadSource(this.value)">
+            <option value="">— 选择高度图 —</option>
+          </select>
+        </div>
+        <div class="te-actions">
+          <button class="btn btn-sm" onclick="teRandomize()">随机地形</button>
+          <button class="btn btn-sm" onclick="teSmooth()">平滑</button>
+          <button class="btn btn-sm" onclick="teInvert()">反相</button>
+        </div>
+        <hr class="te-hr">
+        <div class="form-group">
+          <label>保存为高度图</label>
+          <div class="pc-row">
+            <input type="text" id="teSaveName" placeholder="MyTerrain" style="flex:1;min-width:90px;" autocomplete="off">
+            <button class="btn btn-sm" onclick="teSaveAsHeightmap()">保存</button>
+          </div>
+          <div class="help-text">保存后可在公式参数中直接选用，并随行星包写入 Heightmap Data。</div>
+        </div>
+        <div class="te-actions">
+          <button class="btn btn-sm" onclick="document.getElementById('teImportFile').click()">导入 .txt</button>
+          <button class="btn btn-sm" onclick="teDownload()">下载 .txt</button>
+        </div>
+        <input type="file" id="teImportFile" accept=".txt,.json" style="display:none" onchange="teImport(event)">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 行星包压缩 -->
+<div class="modal-overlay" id="packCompressModal">
+  <div class="modal" style="max-width:580px;">
+    <h2>行星包压缩</h2>
+    <div class="pc-section">
+      <div class="pc-label">01 源文件</div>
+      <div class="pc-row">
+        <button class="btn btn-sm" onclick="document.getElementById('pcZipFile').click()">选择 zip 文件</button>
+        <button class="btn btn-sm" onclick="document.getElementById('pcFolder').click()">选择文件夹</button>
+        <span class="pc-name" id="pcSourceName">未选择</span>
+      </div>
+      <input type="file" id="pcZipFile" accept=".zip" style="display:none" onchange="pcPickZip(event)">
+      <input type="file" id="pcFolder" webkitdirectory multiple style="display:none" onchange="pcPickFolder(event)">
+    </div>
+    <div class="pc-section">
+      <div class="pc-label">02 压缩选项</div>
+      <label class="pc-check"><input type="checkbox" id="pcImg" checked> 压缩 Texture Data 里的所有图片</label>
+      <div class="pc-slider">
+        <span>图片质量</span>
+        <input type="range" id="pcImgQ" min="0.2" max="1" step="0.05" value="0.7" oninput="pcSyncLabels()">
+        <output id="pcImgQVal">0.70</output>
+      </div>
+      <div class="help-text">质量低于 1 时按比例缩小分辨率；保留透明通道用 PNG，否则用 JPEG。文件名保持不变，行星贴图引用不会失效。</div>
+      <label class="pc-check"><input type="checkbox" id="pcHm" checked> 压缩 Heightmap Data 地形细节</label>
+      <div class="pc-slider">
+        <span>高度图保留比例</span>
+        <input type="range" id="pcHmQ" min="0.05" max="1" step="0.05" value="0.5" oninput="pcSyncLabels()">
+        <output id="pcHmQVal">0.50</output>
+      </div>
+      <div class="help-text">高度图会先去均值再按比例重采样，体积显著减小，地形起伏保持不变。</div>
+    </div>
+    <div class="pc-section">
+      <div class="pc-label">03 进度</div>
+      <div class="pc-bar"><div id="pcBar"></div></div>
+      <div class="help-text" id="pcStatus">等待开始</div>
+      <div id="pcResult"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('packCompressModal')">关闭</button>
+      <button class="btn btn-primary" onclick="pcStart()">开始压缩</button>
+      <button class="btn" id="pcDownload" style="display:none" onclick="pcDownloadZip()">下载压缩包</button>
     </div>
   </div>
 </div>
@@ -981,8 +1149,10 @@ function fillDatalists(){
   if (typeof BUILTIN_TEXTURES !== 'undefined'){
     state.texturePresetList = Array.from(BUILTIN_TEXTURES).sort();
   }
-  if (state.builtinHeightmapNames){
-    state.heightmapPresetList = Array.from(state.builtinHeightmapNames).sort();
+  if (state.builtinHeightmapNames || state.heightmaps){
+    const names = new Set(state.builtinHeightmapNames || []);
+    Object.keys(state.heightmaps || {}).forEach(n => names.add(n));   /* 含地形编辑器保存的自定义高度图 */
+    state.heightmapPresetList = Array.from(names).sort();
   }
 }
 /* ===== 自定义预设下拉（内联式）：列表锚定在输入框正下方，随页面内容一起滚动，
@@ -1495,6 +1665,7 @@ function renderBase(p){
   const d = p.BASE_DATA;
   const radiusM = d.radius || 0;
   const radiusUnit = radiusM >= 1e9 ? 'AU' : radiusM >= 1e6 ? 'km' : 'm';
+  state._radiusUnit = radiusUnit;
   const radiusDisplay = radiusUnit === 'AU' ? (radiusM/1.496e11).toFixed(4) : radiusUnit === 'km' ? (radiusM/1000).toFixed(1) : radiusM;
   return section('基础物理属性') +
     row(textField('name','行星名称',p.name,'行星显示名称，导出文件名也用此名称') +
@@ -1516,15 +1687,19 @@ function renderBase(p){
 function onRadiusUnitChange(){
   const val = parseFloat(document.getElementById('radiusVal').value) || 0;
   const unit = document.getElementById('radiusUnit').value;
-  let meters = val;
-  if (unit === 'km') meters = val * 1000;
-  else if (unit === 'AU') meters = val * 1.496e11;
+  const prev = state._radiusUnit || unit;
+  const factors = { m: 1, km: 1000, AU: 1.496e11 };
+  /* 按切换前的单位换算成米，避免把显示数值当作新单位直接相乘（km→AU 会放大千倍） */
+  const meters = val * (factors[prev] || 1);
+  state._radiusUnit = unit;
   const p = currentPlanet();
-  /* 半径影响地形采样(period=lengthM/radius)与轨道布局，必须重画两张预览，
-     否则改半径后预览纹丝不动，只有刷新页面才更新。 */
   if (p){
     p.BASE_DATA.radius = meters;
     updateJsonPreview(); renderTree();
+    /* 直接刷新显示值（不重渲染，保持用户选定的单位） */
+    const shown = unit === 'AU' ? (meters / 1.496e11).toFixed(4) : unit === 'km' ? (meters / 1000).toFixed(1) : String(Math.round(meters));
+    const vi = document.getElementById('radiusVal');
+    if (vi) vi.value = shown;
     scheduleTerrainPreviewDraw(); scheduleOrbitPreviewDraw();
   }
 }
@@ -1633,7 +1808,7 @@ function renderTerrain(p){
 
   html += section('地形参数') +
     row(numField('TERRAIN_DATA.verticeSize','顶点大小',t.verticeSize,0.1,'地形分辨率，越小越精细但大行星可能卡顿') +
-        '<div class="form-group"></div>');
+        '<div class="form-group" style="display:flex;align-items:flex-end;justify-content:flex-end;"><button class="btn btn-sm" onclick="openTerrainEditor()">打开地形编辑器</button></div>');
 
   const fd = state._formulaDifficulty || getNormalTerrainFormulaKey(t);
   const fdLines = (t.terrainFormulaDifficulties && t.terrainFormulaDifficulties[fd]) || [];
@@ -2744,13 +2919,21 @@ function importPackFiles(event){
 }
 function saveProject(){
   if (state.planets.length === 0){ showToast('没有天体可保存', 'error'); return; }
+  /* 仅保存自定义高度图（内置高度图体积大且可随时重新加载） */
+  const customHeightmaps = {};
+  Object.keys(state.heightmaps || {}).forEach(function(name){
+    if (isBuiltinHeightmap(name)) return;
+    const points = state.heightmaps[name];
+    if (Array.isArray(points) && points.length >= 2) customHeightmaps[name] = points;
+  });
   const data = {
     type: 'sfs-planet-pack-project',
     appVersion: '1.0',
     savedAt: new Date().toISOString(),
     packInfo: state.packInfo,
     spaceCenter: state.spaceCenter,
-    planets: state.planets
+    planets: state.planets,
+    heightmaps: customHeightmaps
   };
   downloadFile((state.packInfo.name||'project').replace(/\s+/g,'_')+'.sfsproj', JSON.stringify(data, null, 2));
   showToast('项目已保存');
@@ -2770,6 +2953,17 @@ function openProject(event){
       });
       if (data.packInfo) Object.assign(state.packInfo, data.packInfo);
       if (data.spaceCenter) Object.assign(state.spaceCenter, data.spaceCenter);
+      if (data.heightmaps && typeof data.heightmaps === 'object'){
+        state.heightmaps = state.heightmaps || {};
+        state.heightmapSources = state.heightmapSources || {};
+        Object.keys(data.heightmaps).forEach(function(name){
+          var points = data.heightmaps[name];
+          if (!Array.isArray(points) || points.length < 2) return;
+          state.heightmaps[name] = points;
+          state.heightmapSources[name] = JSON.stringify({ points: points });
+        });
+        fillDatalists();
+      }
       state.activeId = state.planets.length ? state.planets[0]._id : null;
       state.activeTab = 'base';
       state.expanded = {};
@@ -2791,14 +2985,23 @@ function openProject(event){
   event.target.value = '';
 }
 function loadJSZip(){
-  return new Promise((resolve, reject) => {
-    if (window.JSZip) return resolve(window.JSZip);
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
-    script.onload = () => resolve(window.JSZip);
-    script.onerror = () => reject(new Error('JSZip 加载失败'));
-    document.head.appendChild(script);
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  if (window.__jszipPromise) return window.__jszipPromise;
+  window.__jszipPromise = new Promise((resolve, reject) => {
+    /* 优先使用随站点部署的本地副本，离线也能导出/压缩；失败再回退 CDN */
+    const local = document.createElement('script');
+    local.src = 'vendor/jszip.min.js';
+    local.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('JSZip 加载失败'));
+    local.onerror = () => {
+      const cdn = document.createElement('script');
+      cdn.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      cdn.onload = () => resolve(window.JSZip);
+      cdn.onerror = () => { window.__jszipPromise = null; reject(new Error('JSZip 加载失败（本地与 CDN 均不可用）')); };
+      document.head.appendChild(cdn);
+    };
+    document.head.appendChild(local);
   });
+  return window.__jszipPromise;
 }
 function textureKey(name){ return String(name || '').trim().replace(/\.[^/.]+$/, ''); }
 function safeZipFileName(name, fallback){
@@ -3217,6 +3420,31 @@ function applyMobileView(){
   });
 }
 
+/* 「工具」菜单（桌面工具栏） */
+function toggleToolsMenu(){
+  const btn = document.getElementById('btnTools');
+  const menu = document.getElementById('toolsMenu');
+  if (!btn || !menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open', willOpen);
+  if (willOpen){
+    menu.style.left = btn.offsetLeft + 'px';
+    menu.style.top = (btn.offsetTop + btn.offsetHeight + 4) + 'px';
+  }
+}
+function runTool(action){
+  const menu = document.getElementById('toolsMenu');
+  if (menu) menu.classList.remove('open');
+  if (action === 'terrainEditor') return openTerrainEditor();
+  if (action === 'packCompress') return openPackCompress();
+}
+document.addEventListener('click', function(e){
+  const menu = document.getElementById('toolsMenu');
+  if (!menu || !menu.classList.contains('open')) return;
+  if (e.target.closest('#toolsMenu') || e.target.closest('#btnTools')) return;
+  menu.classList.remove('open');
+});
+
 /* 「更多」菜单（移动端工具栏） */
 function toggleMoreMenu(){
   const menu = document.getElementById('moreMenu');
@@ -3230,6 +3458,8 @@ function runMore(action){
   if (action === 'assets') return showAssetManager();
   if (action === 'importTextures') return document.getElementById('textureFiles').click();
   if (action === 'importPack') return document.getElementById('packFiles').click();
+  if (action === 'terrainEditor') return openTerrainEditor();
+  if (action === 'packCompress') return openPackCompress();
   if (action === 'exportPack') return exportPlanetPack();
   if (action === 'theme') return cycleTheme();
   if (action === 'immersive') return toggleImmersive();
@@ -3273,6 +3503,8 @@ function redrawThemedCanvases(){
   drawTerrainPreview();
   if (typeof drawOrbitView === 'function') drawOrbitView();
   if (typeof regenTextureTab === 'function' && document.getElementById('texTabCanvas')) { try { regenTextureTab(); } catch (_e) {} }
+  const teModal = document.getElementById('terrainEditorModal');
+  if (teModal && teModal.classList.contains('active') && typeof teDraw === 'function') { try { teInitCanvas(); teDraw(); } catch (_e) {} }
 }
 function syncThemeButton(){
   const dark = isDark();
@@ -3319,8 +3551,117 @@ function toggleImmersive(force){
   if (ib) ib.textContent = on ? '⛗' : '⛶';
   const mb = document.getElementById('moreImmersiveBtn');
   if (mb) mb.textContent = on ? '退出沉浸' : '沉浸模式';
+  /* 移动端进入真正的全屏：隐藏地址栏与系统导航，避免上下遮挡 */
+  if (on && isTouchLayout()) requestAppFullscreen();
+  else if (!on) exitAppFullscreen();
   applyMobileView();
   setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 40);
+}
+function isTouchLayout(){
+  return isMobileLayout() || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
+function requestAppFullscreen(){
+  if (document.fullscreenElement) return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (!req) return;
+  try {
+    const p = req.call(el, { navigationUI: 'hide' });
+    if (p && p.catch) p.catch(function(){});
+  } catch (_e) {}
+}
+function exitAppFullscreen(){
+  if (!document.fullscreenElement) return;
+  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  if (!ex) return;
+  try {
+    const p = ex.call(document);
+    if (p && p.catch) p.catch(function(){});
+  } catch (_e) {}
+}
+document.addEventListener('fullscreenchange', function(){
+  if (!document.fullscreenElement && document.body.classList.contains('immersive')){
+    /* 用户用系统手势退出全屏时，同步退出沉浸模式 */
+    toggleImmersive(false);
+  }
+});
+
+/* ============================================================
+   移动端自绘下拉：原生 select 在手机上会弹出全屏选择器，遮挡上下文
+============================================================ */
+const msel = { el: null, select: null, bound: false };
+function ensureSelectMenu(){
+  let el = document.getElementById('mselectMenu');
+  if (!el){
+    el = document.createElement('div');
+    el.id = 'mselectMenu';
+    el.className = 'mselect-menu';
+    el.hidden = true;
+    document.body.appendChild(el);
+  }
+  msel.el = el;
+  return el;
+}
+function closeSelectMenu(){
+  if (msel.el){
+    msel.el.hidden = true;
+    if (msel.el.parentElement !== document.body) document.body.appendChild(msel.el);
+  }
+  msel.select = null;
+}
+function openSelectMenu(sel){
+  const menu = ensureSelectMenu();
+  if (msel.select === sel && !menu.hidden){ closeSelectMenu(); return; }
+  msel.select = sel;
+  const opts = Array.from(sel.options || []);
+  menu.innerHTML = opts.map(function(o){
+    return '<div class="mselect-item' + (o.selected ? ' selected' : '') + '" data-v="' + esc(o.value) + '"' +
+      (o.disabled ? ' data-disabled="1"' : '') + '>' + esc(o.textContent) + '</div>';
+  }).join('');
+  const parent = sel.parentElement || sel;
+  if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+  if (parent !== menu.parentElement) parent.appendChild(menu);
+  const r = sel.getBoundingClientRect();
+  menu.style.minWidth = Math.round(r.width) + 'px';
+  menu.classList.toggle('mselect-up', (window.innerHeight - r.bottom < 280) && r.top > 280);
+  menu.hidden = false;
+}
+function setupMobileSelect(){
+  if (msel.bound) return;
+  msel.bound = true;
+  /* pointerdown 阶段拦截，避免原生全屏选择器弹出 */
+  document.addEventListener('pointerdown', function(e){
+    if (!isTouchLayout()) return;
+    const item = e.target.closest ? e.target.closest('.mselect-item') : null;
+    if (item && msel.select){
+      e.preventDefault();
+      if (item.dataset.disabled) return;
+      const sel = msel.select;
+      closeSelectMenu();   /* 先收起，避免 change 触发的重渲染把菜单节点一起清掉 */
+      sel.value = item.dataset.v;
+      sel.dispatchEvent(new Event('input', { bubbles: true }));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    const sel = e.target.closest ? e.target.closest('select') : null;
+    if (sel){
+      e.preventDefault();
+      openSelectMenu(sel);
+      return;
+    }
+    if (msel.select && !(e.target.closest && e.target.closest('#mselectMenu'))) closeSelectMenu();
+  }, true);
+  /* 触摸端兜底，确保不会触发系统选择器 */
+  document.addEventListener('touchstart', function(e){
+    const sel = e.target.closest ? e.target.closest('select') : null;
+    if (sel && isTouchLayout()) e.preventDefault();
+  }, { capture: true, passive: false });
+  window.addEventListener('scroll', function(e){
+    if (!msel.select) return;
+    if (msel.el && (e.target === msel.el || msel.el.contains(e.target))) return;
+    closeSelectMenu();
+  }, true);
+  window.addEventListener('resize', closeSelectMenu);
 }
 /* 「加入我们」 */
 function showJoinModal(){
@@ -3953,6 +4294,7 @@ function init(){
   renderTree();
   fillDatalists();
   setupPresetDropdown();
+  setupMobileSelect();
   updateResponsive();
   openAssetDB().then(countAssets).catch(()=>{});
   fetch('builtin_planets.json', { cache:'no-store' }).then(function(response){
@@ -3991,6 +4333,577 @@ function init(){
     drawTerrainPreview();
   }).catch(function(){ state.heightmaps = {}; state.heightmapSources = {}; state.heightmapLoadState = 'failed'; invalidateTerrainSamples(); drawTerrainPreview(); });
 }
+/* ============================================================
+   地形编辑器（俯视剖面绘制 → SFS 高度图 { points: [...] }）
+============================================================ */
+const te = {
+  points: [], view: 'rect', history: [], canvas: null, ctx: null,
+  dpr: 1, w: 0, h: 0, drawing: false, lastIdx: null, lastH: null,
+  bound: false, resizeBound: false
+};
+
+function teMax(){ const v = parseFloat(document.getElementById('teMaxH').value); return isFinite(v) ? v : 2000; }
+function teMin(){ const v = parseFloat(document.getElementById('teMinH').value); return isFinite(v) ? v : -2000; }
+function teRange(){ const a = teMax(), b = teMin(); return { max: Math.max(a, b + 1), min: Math.min(b, a - 1) }; }
+function teFmt(v){
+  const a = Math.abs(v);
+  if (a >= 10000) return Math.round(v / 1000) + 'k';
+  if (a >= 100) return String(Math.round(v));
+  return String(Math.round(v * 10) / 10);
+}
+function teClamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+function openTerrainEditor(){
+  const p = currentPlanet();
+  const n = parseInt(document.getElementById('teCount').value, 10) || 256;
+  if (!te.points.length){
+    te.points = new Array(n).fill(0);
+    const pr = document.getElementById('tePlanetR');
+    if (p && p.BASE_DATA && p.BASE_DATA.radius) pr.value = p.BASE_DATA.radius;
+  }
+  teRefreshSources();
+  document.getElementById('terrainEditorModal').classList.add('active');
+  requestAnimationFrame(function(){ teInitCanvas(); teDraw(); });
+}
+
+function teRefreshSources(){
+  const sel = document.getElementById('teSource');
+  if (!sel) return;
+  const names = new Set();
+  Object.keys(state.heightmaps || {}).forEach(function(n){ names.add(n); });
+  (state.builtinHeightmapNames || new Set()).forEach(function(n){ names.add(n); });
+  sel.innerHTML = '<option value="">— 选择高度图 —</option>' +
+    Array.from(names).sort().map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+}
+
+function teInitCanvas(){
+  const cv = document.getElementById('teCanvas');
+  if (!cv) return;
+  const rect = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(220, Math.round(rect.width || 640));
+  const h = Math.max(160, Math.round(rect.height || 380));
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  te.canvas = cv; te.ctx = cv.getContext('2d');
+  te.dpr = dpr; te.w = w; te.h = h;
+  if (!te.bound){
+    cv.addEventListener('pointerdown', teDown);
+    cv.addEventListener('pointermove', teMove);
+    cv.addEventListener('pointerup', teUp);
+    cv.addEventListener('pointercancel', teUp);
+    te.bound = true;
+  }
+  if (!te.resizeBound){
+    window.addEventListener('resize', function(){
+      const m = document.getElementById('terrainEditorModal');
+      if (m && m.classList.contains('active')){ teInitCanvas(); teDraw(); }
+    });
+    te.resizeBound = true;
+  }
+}
+
+function teDown(e){
+  e.preventDefault();
+  if (te.canvas && te.canvas.setPointerCapture){ try { te.canvas.setPointerCapture(e.pointerId); } catch(_e){} }
+  tePushHistory();
+  te.drawing = true; te.lastIdx = null; te.lastH = null;
+  tePaint(e.clientX, e.clientY);
+}
+function teMove(e){ if (!te.drawing) return; e.preventDefault(); tePaint(e.clientX, e.clientY); }
+function teUp(){ te.drawing = false; te.lastIdx = null; te.lastH = null; }
+
+function tePaint(clientX, clientY){
+  const cv = te.canvas;
+  if (!cv) return;
+  const rect = cv.getBoundingClientRect();
+  const x = (clientX - rect.left) * (te.w / Math.max(1, rect.width));
+  const y = (clientY - rect.top) * (te.h / Math.max(1, rect.height));
+  const r = teRange(), n = te.points.length;
+  let idx, hv;
+  if (te.view === 'polar'){
+    const hit = tePolarHit(x, y);
+    idx = hit.idx; hv = hit.hv;
+  } else {
+    idx = teClamp(Math.floor((x / te.w) * n), 0, n - 1);
+    hv = teClamp(r.max - (y / te.h) * (r.max - r.min), r.min, r.max);
+  }
+  if (te.lastIdx != null && te.lastIdx !== idx){
+    const step = idx > te.lastIdx ? 1 : -1;
+    const dist = Math.abs(idx - te.lastIdx);
+    for (let i = te.lastIdx; i !== idx; i += step){
+      const t = Math.abs(i - te.lastIdx) / dist;
+      te.points[i] = te.lastH * (1 - t) + hv * t;
+    }
+  }
+  te.points[idx] = hv;
+  te.lastIdx = idx; te.lastH = hv;
+  teDraw();
+}
+
+function tePolarGeom(){
+  const r = teRange();
+  const planetR = Math.max(1, parseFloat(document.getElementById('tePlanetR').value) || 300000);
+  const cx = te.w / 2, cy = te.h / 2;
+  const minV = Math.min.apply(null, te.points.concat([0]));
+  const maxV = Math.max.apply(null, te.points.concat([0]));
+  const minR = planetR + Math.min(minV, 0), maxR = planetR + Math.max(maxV, 0);
+  const maxCanvasR = Math.min(cx, cy) - 18;
+  const scale = maxCanvasR / Math.max(Math.abs(maxR), Math.abs(minR), 1);
+  return { cx: cx, cy: cy, planetR: planetR, scale: scale, r: r };
+}
+function tePolarHit(x, y){
+  const g = tePolarGeom();
+  const dx = x - g.cx, dy = y - g.cy;
+  let a = Math.atan2(dy, dx) + Math.PI / 2;   /* 0 在正上方，顺时针 */
+  const twoPi = Math.PI * 2;
+  a = ((a % twoPi) + twoPi) % twoPi;
+  const idx = Math.round((a / twoPi) * te.points.length) % te.points.length;
+  const worldR = Math.sqrt(dx * dx + dy * dy) / g.scale;
+  return { idx: idx, hv: teClamp(worldR - g.planetR, g.r.min, g.r.max) };
+}
+
+function teDraw(){
+  const ctx = te.ctx;
+  if (!ctx || !te.canvas) return;
+  const c = themeColors();
+  ctx.setTransform(te.dpr, 0, 0, te.dpr, 0, 0);
+  ctx.clearRect(0, 0, te.w, te.h);
+  if (te.view === 'polar') teDrawPolar(ctx, c);
+  else teDrawRect(ctx, c);
+}
+
+function teDrawRect(ctx, c){
+  const w = te.w, h = te.h, r = teRange();
+  ctx.font = '11px system-ui, -apple-system, sans-serif';
+  ctx.textBaseline = 'bottom';
+  for (let i = 0; i <= 10; i++){
+    const y = (i / 10) * h;
+    ctx.strokeStyle = (i === 0 || i === 10) ? c.outline : c.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    const hv = r.max - (i / 10) * (r.max - r.min);
+    ctx.fillStyle = c.labelSub;
+    ctx.fillText(teFmt(hv), 6, Math.min(h - 2, Math.max(12, y - 3)));
+  }
+  for (let i = 0; i <= 10; i++){
+    const x = (i / 10) * w;
+    ctx.strokeStyle = c.grid;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  const y0 = ((r.max - 0) / (r.max - r.min)) * h;
+  if (y0 >= 0 && y0 <= h){
+    ctx.strokeStyle = c.outline; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(w, y0); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  const pts = te.points, n = pts.length;
+  const px = function(i){ return n <= 1 ? 0 : (i / (n - 1)) * w; };
+  const py = function(v){ return ((r.max - v) / (r.max - r.min)) * h; };
+  /* 填充 */
+  ctx.beginPath();
+  for (let i = 0; i < n; i++){ const x = px(i), y = py(pts[i]); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = isDark() ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  ctx.fill();
+  /* 轮廓 */
+  ctx.beginPath();
+  for (let i = 0; i < n; i++){ const x = px(i), y = py(pts[i]); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+  ctx.strokeStyle = c.label; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+function teDrawPolar(ctx, c){
+  const g = tePolarGeom(), w = te.w, h = te.h;
+  ctx.font = '11px system-ui, -apple-system, sans-serif';
+  ctx.textBaseline = 'middle';
+  /* 星球本体 */
+  ctx.beginPath(); ctx.arc(g.cx, g.cy, Math.max(1, g.planetR * g.scale), 0, Math.PI * 2);
+  ctx.fillStyle = isDark() ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+  ctx.fill();
+  ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
+  /* 高度参考环 */
+  for (let i = 1; i <= 4; i++){
+    const hv = g.r.min + (i / 4) * (g.r.max - g.r.min);
+    const rr = (g.planetR + hv) * g.scale;
+    ctx.beginPath(); ctx.arc(g.cx, g.cy, Math.max(1, rr), 0, Math.PI * 2);
+    ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = c.labelSub;
+    ctx.fillText(teFmt(hv), g.cx + 4, g.cy - Math.max(1, rr));
+  }
+  /* 地形轮廓 */
+  const n = te.points.length;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++){
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const rr = (g.planetR + te.points[i]) * g.scale;
+    const x = g.cx + rr * Math.cos(a), y = g.cy + rr * Math.sin(a);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = c.label; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.fillStyle = isDark() ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  ctx.fill();
+}
+
+function teSetView(mode){
+  te.view = mode === 'polar' ? 'polar' : 'rect';
+  document.getElementById('teRectBtn').classList.toggle('active', te.view === 'rect');
+  document.getElementById('tePolarBtn').classList.toggle('active', te.view === 'polar');
+  document.getElementById('teHint').textContent = te.view === 'polar'
+    ? '沿圆周拖动：半径方向决定高度 · 极坐标'
+    : '拖动绘制地形轮廓 · 直角坐标';
+  teDraw();
+}
+function teParamsChanged(){ teDraw(); }
+
+function tePushHistory(){
+  te.history.push(te.points.slice());
+  if (te.history.length > 80) te.history.shift();
+}
+function teUndo(){
+  if (!te.history.length){ showToast('没有可撤销的操作'); return; }
+  te.points = te.history.pop();
+  document.getElementById('teCount').value = te.points.length;
+  teDraw();
+}
+function teClear(){
+  tePushHistory();
+  te.points = new Array(te.points.length).fill(0);
+  teDraw();
+}
+function teInvert(){
+  tePushHistory();
+  const r = teRange();
+  te.points = te.points.map(function(v){ return teClamp(-v, r.min, r.max); });
+  teDraw();
+}
+function teSmooth(){
+  tePushHistory();
+  const p = te.points;
+  for (let pass = 0; pass < 2; pass++){
+    const q = p.slice();
+    for (let i = 1; i < p.length - 1; i++) q[i] = (p[i - 1] + p[i] * 2 + p[i + 1]) / 4;
+    for (let i = 1; i < p.length - 1; i++) p[i] = q[i];
+  }
+  teDraw();
+}
+function teRandomize(){
+  tePushHistory();
+  const n = te.points.length, r = teRange();
+  const mid = (r.max + r.min) / 2, amp = (r.max - r.min) / 2;
+  let seed = Math.floor(Math.random() * 2147483647) + 1;
+  const rnd = function(){ seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
+  const grid = [];
+  for (let i = 0; i < 17; i++) grid.push(rnd() * 2 - 1);
+  const noise = function(t){
+    const x = t * 16, i = Math.floor(x) % 16, f = x - Math.floor(x), s = f * f * (3 - 2 * f);
+    return grid[i] * (1 - s) + grid[i + 1] * s;
+  };
+  for (let i = 0; i < n; i++){
+    const t = n <= 1 ? 0 : i / (n - 1);
+    const v = noise(t) * 0.6 + noise(t * 2.7 + 3.1) * 0.28 + noise(t * 6.3 + 7.7) * 0.12;
+    te.points[i] = teClamp(mid + v * amp * 0.85, r.min, r.max);
+  }
+  teDraw();
+  showToast('已生成随机地形');
+}
+function teResample(){
+  const target = teClamp(parseInt(document.getElementById('teCount').value, 10) || 256, 8, 4096);
+  const old = te.points;
+  tePushHistory();
+  if (old.length === target){ teDraw(); return; }
+  const out = new Array(target);
+  for (let i = 0; i < target; i++){
+    const t = target <= 1 ? 0 : i / (target - 1);
+    const x = t * (old.length - 1), i0 = Math.floor(x), i1 = Math.min(old.length - 1, i0 + 1), f = x - i0;
+    out[i] = old[i0] * (1 - f) + old[i1] * f;
+  }
+  te.points = out;
+  document.getElementById('teCount').value = target;
+  teDraw();
+}
+
+function teLoadSource(name){
+  if (!name) return;
+  const pts = state.heightmaps && state.heightmaps[name];
+  if (!Array.isArray(pts) || pts.length < 2){ showToast('该高度图数据不可用', 'error'); return; }
+  tePushHistory();
+  const target = teClamp(parseInt(document.getElementById('teCount').value, 10) || pts.length, 8, 4096);
+  const out = new Array(target);
+  for (let i = 0; i < target; i++){
+    const t = target <= 1 ? 0 : i / (target - 1);
+    const x = t * (pts.length - 1), i0 = Math.floor(x), i1 = Math.min(pts.length - 1, i0 + 1), f = x - i0;
+    out[i] = pts[i0] * (1 - f) + pts[i1] * f;
+  }
+  te.points = out;
+  document.getElementById('teCount').value = target;
+  const mx = Math.max.apply(null, out), mn = Math.min.apply(null, out);
+  if (mx > teMax()) document.getElementById('teMaxH').value = Math.ceil(mx / 100) * 100;
+  if (mn < teMin()) document.getElementById('teMinH').value = Math.floor(mn / 100) * 100;
+  teDraw();
+  showToast('已载入高度图：' + name);
+}
+
+function teSaveAsHeightmap(){
+  const inp = document.getElementById('teSaveName');
+  let name = (inp.value || '').trim();
+  if (!name){ showToast('请先填写高度图名称', 'error'); return; }
+  name = name.replace(/[\\/:*?"<>|]/g, '_');
+  state.heightmaps = state.heightmaps || {};
+  state.heightmaps[name] = te.points.map(function(v){ return Math.round(v * 1000) / 1000; });
+  if (state.heightmapSources) delete state.heightmapSources[name];
+  fillDatalists();
+  teRefreshSources();
+  document.getElementById('teSource').value = name;
+  showToast('已保存高度图：' + name + '（导出时写入 Heightmap Data）');
+}
+
+function teDownload(){
+  const pts = te.points.map(function(v){ return Math.round(v * 1000) / 1000; });
+  downloadFile('terrain_heightmap.txt', JSON.stringify({ points: pts }, null, 2));
+  showToast('已下载高度图（' + pts.length + ' 个采样点）');
+}
+
+function teImport(ev){
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    try {
+      const data = JSON.parse(String(reader.result));
+      const pts = Array.isArray(data) ? data : (data && Array.isArray(data.points) ? data.points : null);
+      if (!pts || pts.length < 2) throw new Error('未找到 points 数组');
+      const clean = pts.map(Number).filter(function(v){ return isFinite(v); });
+      if (clean.length < 2) throw new Error('数据无效');
+      tePushHistory();
+      te.points = clean;
+      document.getElementById('teCount').value = clean.length;
+      const mx = Math.max.apply(null, clean), mn = Math.min.apply(null, clean);
+      if (mx > teMax()) document.getElementById('teMaxH').value = Math.ceil(mx / 100) * 100;
+      if (mn < teMin()) document.getElementById('teMinH').value = Math.floor(mn / 100) * 100;
+      teDraw();
+      showToast('已导入高度图（' + clean.length + ' 个采样点）');
+    } catch (e) {
+      showToast('导入失败：' + e.message, 'error');
+    }
+    ev.target.value = '';
+  };
+  reader.readAsText(f);
+}
+
+/* ============================================================
+   行星包压缩（Texture Data 图片 + Heightmap Data 高度图）
+============================================================ */
+const pc = { files: [], zipBlob: null, name: 'compressed_pack.zip', originalSize: 0, busy: false };
+
+function openPackCompress(){
+  pcSyncLabels();
+  document.getElementById('packCompressModal').classList.add('active');
+}
+function pcSyncLabels(){
+  const iq = document.getElementById('pcImgQ'), hq = document.getElementById('pcHmQ');
+  if (iq) document.getElementById('pcImgQVal').textContent = (+iq.value).toFixed(2);
+  if (hq) document.getElementById('pcHmQVal').textContent = (+hq.value).toFixed(2);
+}
+function pcSetProgress(pct, msg){
+  const bar = document.getElementById('pcBar');
+  if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  if (msg != null) document.getElementById('pcStatus').textContent = msg;
+}
+function pcResetResult(){
+  pc.zipBlob = null;
+  document.getElementById('pcResult').innerHTML = '';
+  document.getElementById('pcDownload').style.display = 'none';
+  pcSetProgress(0, '等待开始');
+}
+function pcFmtSize(bytes){
+  if (!bytes) return '0 B';
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  return (bytes / 1024).toFixed(1) + ' KB';
+}
+
+async function pcPickZip(ev){
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  try {
+    const JSZip = await loadJSZip();
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    const files = [];
+    zip.forEach(function(rel, entry){ if (!entry.dir) files.push({ path: rel, entry: entry }); });
+    pc.files = files;
+    pc.originalSize = f.size;
+    pc.name = (f.name.replace(/\.zip$/i, '') || 'pack') + '_compressed.zip';
+    document.getElementById('pcSourceName').textContent = f.name + ' · ' + files.length + ' 个文件 · ' + pcFmtSize(f.size);
+    pcResetResult();
+  } catch (e) {
+    showToast('读取压缩包失败：' + e.message, 'error');
+  }
+  ev.target.value = '';
+}
+
+function pcPickFolder(ev){
+  const list = Array.from(ev.target.files || []);
+  if (!list.length) return;
+  const root = (list[0].webkitRelativePath || '').split('/')[0];
+  let total = 0;
+  pc.files = list.map(function(file){
+    let rel = file.webkitRelativePath || file.name;
+    if (root && rel.indexOf(root + '/') === 0) rel = rel.slice(root.length + 1);   /* 去掉外层文件夹，SFS 要求根目录为 Planet Data/ 等 */
+    total += file.size;
+    return { path: rel, file: file };
+  });
+  pc.originalSize = total;
+  pc.name = (root || 'pack') + '_compressed.zip';
+  document.getElementById('pcSourceName').textContent = (root || '文件夹') + ' · ' + pc.files.length + ' 个文件 · ' + pcFmtSize(total);
+  pcResetResult();
+  ev.target.value = '';
+}
+
+function pcLoadImage(blob){
+  return new Promise(function(resolve, reject){
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = function(){ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('图片解码失败')); };
+    img.src = url;
+  });
+}
+
+async function pcCompressImage(blob, quality){
+  const img = await pcLoadImage(blob);
+  const srcW = img.naturalWidth || img.width;
+  const srcH = img.naturalHeight || img.height;
+  const scale = Math.max(0.05, Math.min(1, quality));
+  const w = Math.max(1, Math.round(srcW * scale));
+  const h = Math.max(1, Math.round(srcH * scale));
+  /* 抽样检测透明通道（避免读取整张大图） */
+  const probe = document.createElement('canvas');
+  probe.width = Math.min(srcW, 512);
+  probe.height = Math.min(srcH, 512);
+  const pctx = probe.getContext('2d', { willReadFrequently: true });
+  pctx.drawImage(img, 0, 0, probe.width, probe.height);
+  const data = pctx.getImageData(0, 0, probe.width, probe.height).data;
+  let hasAlpha = false;
+  for (let i = 3; i < data.length; i += 4){ if (data[i] < 250){ hasAlpha = true; break; } }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, w, h);
+  const type = hasAlpha ? 'image/png' : 'image/jpeg';
+  const jpegQ = Math.max(0.4, Math.min(0.95, quality));
+  const out = await new Promise(function(resolve){
+    canvas.toBlob(function(b){ resolve(b); }, type, hasAlpha ? undefined : jpegQ);
+  });
+  /* 若压缩结果反而更大（小图 / 已高度优化），保留原文件 */
+  return (out && out.size < blob.size) ? out : blob;
+}
+
+function pcCompressHeightmap(txt, keepRatio){
+  let json;
+  try { json = JSON.parse(txt); } catch (_e) { return txt; }
+  if (!json || !Array.isArray(json.points) || json.points.length < 2) return txt;
+  const pts = json.points.map(Number).filter(function(v){ return isFinite(v); });
+  if (pts.length < 2) return txt;
+  const avg = pts.reduce(function(a, b){ return a + b; }, 0) / pts.length;
+  const centered = pts.map(function(v){ return Math.round((v - avg) * 1000) / 1000; });
+  const keep = Math.max(2, Math.round(centered.length * Math.max(0.02, Math.min(1, keepRatio))));
+  let arr = centered;
+  if (keep < centered.length){
+    const step = (centered.length - 1) / (keep - 1);
+    arr = [];
+    for (let i = 0; i < keep; i++) arr.push(centered[Math.round(i * step)]);
+  }
+  json.points = arr;
+  return JSON.stringify(json, null, 2);
+}
+
+async function pcReadBytes(rec){
+  if (rec.entry) return rec.entry.async('arraybuffer');
+  return rec.file.arrayBuffer();
+}
+
+async function pcStart(){
+  if (pc.busy) return;
+  if (!pc.files.length){ showToast('请先选择 zip 或文件夹', 'error'); return; }
+  pc.busy = true;
+  const btn = document.getElementById('pcDownload');
+  btn.style.display = 'none';
+  document.getElementById('pcResult').innerHTML = '';
+  try {
+    const JSZip = await loadJSZip();
+    const imgOn = document.getElementById('pcImg').checked;
+    const imgQ = parseFloat(document.getElementById('pcImgQ').value) || 0.7;
+    const hmOn = document.getElementById('pcHm').checked;
+    const hmQ = parseFloat(document.getElementById('pcHmQ').value) || 0.5;
+    const out = new JSZip();
+    const stats = { img: 0, hm: 0, copied: 0, failed: 0 };
+    const total = pc.files.length;
+    for (let i = 0; i < total; i++){
+      const rec = pc.files[i];
+      const path = rec.path;
+      try {
+        if (/__MACOSX|\.DS_Store$/i.test(path)){
+          stats.failed++;
+        } else if (imgOn && /(^|\/)Texture Data\//i.test(path) && /\.(png|jpe?g|webp|bmp)$/i.test(path)){
+          const blob = rec.entry ? await rec.entry.async('blob') : rec.file;
+          const outBlob = await pcCompressImage(blob, imgQ);
+          out.file(path, outBlob);
+          stats.img++;
+        } else if (hmOn && /(^|\/)Heightmap Data\//i.test(path) && /\.txt$/i.test(path)){
+          const txt = rec.entry ? await rec.entry.async('text') : await rec.file.text();
+          out.file(path, pcCompressHeightmap(txt, hmQ));
+          stats.hm++;
+        } else {
+          out.file(path, await pcReadBytes(rec));
+          stats.copied++;
+        }
+      } catch (err) {
+        try { out.file(path, await pcReadBytes(rec)); stats.copied++; }
+        catch (_e) { stats.failed++; }
+      }
+      if (i % 3 === 0 || i === total - 1){
+        pcSetProgress(Math.round(((i + 1) / total) * 80), '处理中…（' + (i + 1) + '/' + total + '）');
+        await new Promise(function(r){ setTimeout(r, 0); });
+      }
+    }
+    pcSetProgress(85, '正在生成压缩包…');
+    const blob = await out.generateAsync(
+      { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+      function(meta){ pcSetProgress(85 + Math.round(meta.percent * 0.15), '正在生成压缩包… ' + Math.round(meta.percent) + '%'); }
+    );
+    pc.zipBlob = blob;
+    const before = pc.originalSize || 0;
+    const after = blob.size;
+    const pct = before ? (after / before) * 100 : 0;
+    document.getElementById('pcResult').innerHTML =
+      '<div>' + pcFmtSize(before) + ' → <b>' + pcFmtSize(after) + '</b>' +
+      (before ? '（原体积的 ' + pct.toFixed(1) + '%，节省 ' + Math.max(0, 100 - pct).toFixed(1) + '%）' : '') + '</div>' +
+      '<div style="color:var(--text-muted);font-size:0.86rem;">压缩图片 ' + stats.img + ' 个 · 高度图 ' + stats.hm + ' 个 · 原样复制 ' + stats.copied + ' 个' +
+      (stats.failed ? ' · 跳过 ' + stats.failed + ' 个' : '') + '</div>';
+    btn.style.display = '';
+    pcSetProgress(100, '完成');
+  } catch (e) {
+    pcSetProgress(0, '压缩失败：' + e.message);
+    showToast('压缩失败：' + e.message, 'error');
+  } finally {
+    pc.busy = false;
+  }
+}
+
+function pcDownloadZip(){
+  if (!pc.zipBlob) return;
+  const url = URL.createObjectURL(pc.zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = pc.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+}
+
 init();
 </script>
 </body>
