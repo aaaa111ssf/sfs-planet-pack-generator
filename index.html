@@ -4452,16 +4452,20 @@ function tePaint(clientX, clientY){
 
 function tePolarGeom(){
   const r = teRange();
-  const planetR = Math.max(1, parseFloat(document.getElementById('tePlanetR').value) || 300000);
   const cx = te.w / 2, cy = te.h / 2;
-  const minV = Math.min.apply(null, te.points.concat([0]));
-  const maxV = Math.max.apply(null, te.points.concat([0]));
-  const minR = planetR + Math.min(minV, 0);
-  const maxR = planetR + Math.max(maxV, 0);
   const maxCanvasR = Math.max(40, Math.min(cx, cy) - 18);
-  /* 与参考工具一致：按真实半径比例缩放，不做高度夸张 */
-  const scale = maxCanvasR / Math.max(Math.abs(maxR), Math.abs(minR), 1);
-  return { cx: cx, cy: cy, planetR: planetR, scale: scale, r: r, maxCanvasR: maxCanvasR };
+  let minV = 0, maxV = 0;
+  for (let i = 0; i < te.points.length; i++){
+    const v = te.points[i];
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+  /* 与参考工具一致：径向轴表达“高度”，0 高度为基准圆，正负高度按真实比例展开 */
+  const mid = (r.max + r.min) / 2;
+  const halfSpan = Math.max(1, (r.max - r.min) / 2);
+  const hScale = (maxCanvasR * 0.42) / halfSpan;
+  const zeroPx = maxCanvasR * 0.52 - mid * hScale;
+  return { cx: cx, cy: cy, maxCanvasR: maxCanvasR, zeroPx: zeroPx, hScale: hScale, r: r };
 }
 function tePolarHit(x, y){
   const g = tePolarGeom();
@@ -4470,8 +4474,8 @@ function tePolarHit(x, y){
   const twoPi = Math.PI * 2;
   a = ((a % twoPi) + twoPi) % twoPi;
   const idx = Math.round((a / twoPi) * te.points.length) % te.points.length;
-  const worldR = Math.sqrt(dx * dx + dy * dy) / g.scale;
-  return { idx: idx, hv: teClamp(worldR - g.planetR, g.r.min, g.r.max) };
+  const hv = (Math.sqrt(dx * dx + dy * dy) - g.zeroPx) / g.hScale;
+  return { idx: idx, hv: teClamp(hv, g.r.min, g.r.max) };
 }
 
 function teDraw(){
@@ -4524,42 +4528,57 @@ function teDrawRect(ctx, c){
 }
 
 function teDrawPolar(ctx, c){
-  const g = tePolarGeom(), w = te.w, h = te.h, r = g.r;
+  const g = tePolarGeom();
   ctx.font = '11px system-ui, -apple-system, sans-serif';
   ctx.textBaseline = 'middle';
-  const basePx = Math.max(1, g.planetR * g.scale);
-  /* 同心圆网格（与参考工具一致：从星球半径向外 5 圈） */
-  for (let i = 0; i <= 5; i++){
-    const radius = (g.planetR + (i / 5) * (r.max - r.min) * 0.5) * g.scale;
-    ctx.beginPath(); ctx.arc(g.cx, g.cy, Math.max(1, radius), 0, Math.PI * 2);
-    ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
-  }
-  /* 星球半径参考圈，稍作强调 */
-  ctx.beginPath(); ctx.arc(g.cx, g.cy, basePx, 0, Math.PI * 2);
-  ctx.strokeStyle = c.outline; ctx.lineWidth = 1; ctx.stroke();
+  /* 高度刻度环：0 为基准圆，向内外按高度值等距展开 */
+  const levels = [];
+  const step = (g.r.max - g.r.min) / 4;
+  for (let i = 0; i <= 4; i++) levels.push(g.r.min + step * i);
+  levels.push(0);
+  levels.sort(function(a, b){ return a - b; });
+  const uniq = levels.filter(function(v, i){ return i === 0 || Math.abs(v - levels[i - 1]) > 1e-6; });
+  uniq.forEach(function(hv){
+    const rr = Math.max(1, g.zeroPx + hv * g.hScale);
+    if (rr > g.maxCanvasR) return;
+    ctx.beginPath(); ctx.arc(g.cx, g.cy, rr, 0, Math.PI * 2);
+    ctx.strokeStyle = Math.abs(hv) < 0.001 ? c.outline : c.grid;
+    ctx.lineWidth = 1;
+    if (Math.abs(hv) < 0.001) ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    /* 只标注 最小 / 0 / 最大，避免刻度密集时文字重叠 */
+    const isKey = Math.abs(hv - g.r.min) < 1e-6 || Math.abs(hv - g.r.max) < 1e-6 || Math.abs(hv) < 0.001;
+    if (isKey){
+      ctx.fillStyle = c.labelSub;
+      ctx.fillText(teFmt(hv) + 'm', g.cx + rr + 4, g.cy + (hv < 0 ? 10 : (hv > 0 ? -10 : 0)));
+    }
+  });
   /* 径向网格线 */
+  const outer = g.zeroPx + g.r.max * g.hScale;
   for (let i = 0; i < 12; i++){
     const a = (i / 12) * Math.PI * 2;
-    const rr = (g.planetR + (r.max - r.min) * 0.5) * g.scale;
     ctx.beginPath();
     ctx.moveTo(g.cx, g.cy);
-    ctx.lineTo(g.cx + rr * Math.cos(a), g.cy + rr * Math.sin(a));
+    ctx.lineTo(g.cx + outer * Math.cos(a), g.cy + outer * Math.sin(a));
     ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
   }
-  /* 半径标注 */
-  ctx.fillStyle = c.labelSub;
-  ctx.fillText(teFmt(g.planetR), g.cx + basePx + 5, g.cy);
-  /* 地形轮廓（真实比例，不夸张） */
+  /* 地形轮廓：径向 = 高度，正负按真实比例 */
   const n = te.points.length;
   ctx.beginPath();
   for (let i = 0; i < n; i++){
     const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-    const rr = Math.max(1, (g.planetR + te.points[i]) * g.scale);
+    const rr = Math.max(1, g.zeroPx + te.points[i] * g.hScale);
     const x = g.cx + rr * Math.cos(a), y = g.cy + rr * Math.sin(a);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.closePath();
   ctx.strokeStyle = c.label; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+  /* 说明文字 */
+  ctx.fillStyle = c.labelSub;
+  ctx.textBaseline = 'top';
+  ctx.fillText('极坐标 · 径向为高度 (m)', 10, 8);
+  ctx.textBaseline = 'middle';
 }
 
 function teSetView(mode){
