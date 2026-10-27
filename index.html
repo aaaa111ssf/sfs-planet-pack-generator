@@ -380,6 +380,7 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
   position:absolute;top:100%;left:0;z-index:1300;
   min-width:100%;width:max-content;max-width:min(340px, calc(100vw - 24px));
   max-height:260px;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;touch-action:pan-y;
   background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius);
   box-shadow:0 8px 28px rgba(0,0,0,0.22);padding:4px 0;margin-top:4px;
 }
@@ -3554,6 +3555,10 @@ function toggleImmersive(force){
   /* 移动端进入真正的全屏：隐藏地址栏与系统导航，避免上下遮挡 */
   if (on && isTouchLayout()) requestAppFullscreen();
   else if (!on) exitAppFullscreen();
+  /* Android WebView 容器：交给原生隐藏状态栏/导航栏，保证沉浸可靠 */
+  if (window.AndroidBridge && window.AndroidBridge.setFullscreen){
+    try { window.AndroidBridge.setFullscreen(!!on); } catch (_e) {}
+  }
   applyMobileView();
   setTimeout(function(){ drawTerrainPreview(); initOrbitCanvas(); drawOrbitView(); }, 40);
 }
@@ -3629,27 +3634,31 @@ function openSelectMenu(sel){
 function setupMobileSelect(){
   if (msel.bound) return;
   msel.bound = true;
-  /* pointerdown 阶段拦截，避免原生全屏选择器弹出 */
+  /* pointerdown 阶段只负责开/关，选中交给 click：
+     若在 pointerdown 直接选中，触摸滑动列表会立刻命中并关闭，导致下拉无法滚动 */
   document.addEventListener('pointerdown', function(e){
     if (!isTouchLayout()) return;
-    const item = e.target.closest ? e.target.closest('.mselect-item') : null;
-    if (item && msel.select){
-      e.preventDefault();
-      if (item.dataset.disabled) return;
-      const sel = msel.select;
-      closeSelectMenu();   /* 先收起，避免 change 触发的重渲染把菜单节点一起清掉 */
-      sel.value = item.dataset.v;
-      sel.dispatchEvent(new Event('input', { bubbles: true }));
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      return;
-    }
+    const inMenu = !!(e.target.closest && e.target.closest('#mselectMenu'));
+    if (inMenu) return;   /* 菜单内允许正常滑动 */
     const sel = e.target.closest ? e.target.closest('select') : null;
     if (sel){
       e.preventDefault();
       openSelectMenu(sel);
       return;
     }
-    if (msel.select && !(e.target.closest && e.target.closest('#mselectMenu'))) closeSelectMenu();
+    if (msel.select) closeSelectMenu();
+  }, true);
+  document.addEventListener('click', function(e){
+    if (!isTouchLayout() || !msel.select) return;
+    const item = e.target.closest ? e.target.closest('.mselect-item') : null;
+    if (!item || !msel.el || !msel.el.contains(item)) return;
+    e.preventDefault();
+    if (item.dataset.disabled) return;
+    const sel = msel.select;
+    closeSelectMenu();
+    sel.value = item.dataset.v;
+    sel.dispatchEvent(new Event('input', { bubbles: true }));
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
   }, true);
   /* 触摸端兜底，确保不会触发系统选择器 */
   document.addEventListener('touchstart', function(e){
@@ -4447,10 +4456,12 @@ function tePolarGeom(){
   const cx = te.w / 2, cy = te.h / 2;
   const minV = Math.min.apply(null, te.points.concat([0]));
   const maxV = Math.max.apply(null, te.points.concat([0]));
-  const minR = planetR + Math.min(minV, 0), maxR = planetR + Math.max(maxV, 0);
-  const maxCanvasR = Math.min(cx, cy) - 18;
+  const minR = planetR + Math.min(minV, 0);
+  const maxR = planetR + Math.max(maxV, 0);
+  const maxCanvasR = Math.max(40, Math.min(cx, cy) - 18);
+  /* 与参考工具一致：按真实半径比例缩放，不做高度夸张 */
   const scale = maxCanvasR / Math.max(Math.abs(maxR), Math.abs(minR), 1);
-  return { cx: cx, cy: cy, planetR: planetR, scale: scale, r: r };
+  return { cx: cx, cy: cy, planetR: planetR, scale: scale, r: r, maxCanvasR: maxCanvasR };
 }
 function tePolarHit(x, y){
   const g = tePolarGeom();
@@ -4513,36 +4524,42 @@ function teDrawRect(ctx, c){
 }
 
 function teDrawPolar(ctx, c){
-  const g = tePolarGeom(), w = te.w, h = te.h;
+  const g = tePolarGeom(), w = te.w, h = te.h, r = g.r;
   ctx.font = '11px system-ui, -apple-system, sans-serif';
   ctx.textBaseline = 'middle';
-  /* 星球本体 */
-  ctx.beginPath(); ctx.arc(g.cx, g.cy, Math.max(1, g.planetR * g.scale), 0, Math.PI * 2);
-  ctx.fillStyle = isDark() ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  ctx.fill();
-  ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
-  /* 高度参考环 */
-  for (let i = 1; i <= 4; i++){
-    const hv = g.r.min + (i / 4) * (g.r.max - g.r.min);
-    const rr = (g.planetR + hv) * g.scale;
-    ctx.beginPath(); ctx.arc(g.cx, g.cy, Math.max(1, rr), 0, Math.PI * 2);
+  const basePx = Math.max(1, g.planetR * g.scale);
+  /* 同心圆网格（与参考工具一致：从星球半径向外 5 圈） */
+  for (let i = 0; i <= 5; i++){
+    const radius = (g.planetR + (i / 5) * (r.max - r.min) * 0.5) * g.scale;
+    ctx.beginPath(); ctx.arc(g.cx, g.cy, Math.max(1, radius), 0, Math.PI * 2);
     ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = c.labelSub;
-    ctx.fillText(teFmt(hv), g.cx + 4, g.cy - Math.max(1, rr));
   }
-  /* 地形轮廓 */
+  /* 星球半径参考圈，稍作强调 */
+  ctx.beginPath(); ctx.arc(g.cx, g.cy, basePx, 0, Math.PI * 2);
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 1; ctx.stroke();
+  /* 径向网格线 */
+  for (let i = 0; i < 12; i++){
+    const a = (i / 12) * Math.PI * 2;
+    const rr = (g.planetR + (r.max - r.min) * 0.5) * g.scale;
+    ctx.beginPath();
+    ctx.moveTo(g.cx, g.cy);
+    ctx.lineTo(g.cx + rr * Math.cos(a), g.cy + rr * Math.sin(a));
+    ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.stroke();
+  }
+  /* 半径标注 */
+  ctx.fillStyle = c.labelSub;
+  ctx.fillText(teFmt(g.planetR), g.cx + basePx + 5, g.cy);
+  /* 地形轮廓（真实比例，不夸张） */
   const n = te.points.length;
   ctx.beginPath();
   for (let i = 0; i < n; i++){
     const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-    const rr = (g.planetR + te.points[i]) * g.scale;
+    const rr = Math.max(1, (g.planetR + te.points[i]) * g.scale);
     const x = g.cx + rr * Math.cos(a), y = g.cy + rr * Math.sin(a);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.closePath();
   ctx.strokeStyle = c.label; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
-  ctx.fillStyle = isDark() ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  ctx.fill();
 }
 
 function teSetView(mode){
