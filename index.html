@@ -210,9 +210,10 @@ header p{color:var(--text-muted);font-size:1rem;font-weight:400;letter-spacing:0
 .export-card h4{font-size:0.92rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;color:var(--text);}
 .export-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.04);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px;backdrop-filter:blur(2px);}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.04);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px;backdrop-filter:blur(2px);overflow-y:auto;}
 .modal-overlay.active{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;max-width:460px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,0.08);}
+/* 弹窗高度跟随可见视口，矮屏可整体滚动，避免底部被裁掉 */
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;max-width:460px;width:100%;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,0.08);margin:auto;}
 .modal h2{font-size:1.1rem;font-weight:300;margin-bottom:14px;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
 
@@ -481,7 +482,6 @@ body.immersive .join-fab{transform:translateX(140%);pointer-events:none;}
   </div>
     <input type="file" id="packFiles" accept=".txt,.json" multiple style="display:none" onchange="importPackFiles(event)">
     <input type="file" id="textureFiles" accept="image/png,image/jpeg,image/webp,image/bmp,image/tga" multiple style="display:none" onchange="importTextureFiles(event)">
-  </div>
 
   <div class="main-grid">
     <div class="sidebar" id="sidebar">
